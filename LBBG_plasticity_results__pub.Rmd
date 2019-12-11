@@ -5,8 +5,6 @@ date: '2019-06-26'
 output: word_document
 ---
 
-
-
 ```{r setup, include = F}
 knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='Fig.s/',
                       echo = F, message=FALSE, include = F)
@@ -86,7 +84,7 @@ rand.ol <- rbind(rand.ol, tmp) ## combine with random overlaps
 rand.ol$pair <- factor(rand.ol$pair)
 
 ##Actual overlap between random pairs versus within individuals
-bp.ol <- ggplot(rand.ol, aes(pair, overlap)) + geom_boxplot() +ylab("Range Overlap") + theme(axis.title.y = element_text(size = 9),  axis.text = element_text(size = 9), axis.title.x = element_blank())
+bp.ol <- ggplot(rand.ol, aes(pair, overlap)) + geom_boxplot() +ylab("Distribution Overlap") + ggtitle("a")+theme(axis.title.y = element_text(size = 9),  axis.text = element_text(size = 9), axis.title.x = element_blank(),plot.title=element_text(hjust=0))
 
 
 ######Randomization
@@ -176,8 +174,9 @@ rand.t.f$pair <- factor(rand.t.f$pair)
 rand.t.s$pair <- factor(rand.t.s$pair)
 
 ##actual differences in variation (beween vs within) per direction
-bp.tf <- ggplot(rand.t.f, aes(pair, mn_var)) + geom_boxplot()+ylab("Mean autumn route variance (km)") + theme(axis.title.y = element_text(size = 9),  axis.text = element_text(size = 9), axis.title.x = element_blank())
-bp.ts <- ggplot(rand.t.s, aes(pair, mn_var)) + geom_boxplot() +ylab("Mean spring route variance (km)") + theme(axis.title.y = element_text(size = 9),  axis.text = element_text(size = 9), axis.title.x = element_blank())
+bp.tf <- ggplot(rand.t.f, aes(pair, mn_var)) + geom_boxplot()+ylab("Mean autumn route variance (km)") + ggtitle("b")+
+  theme(axis.title.y = element_text(size = 9),  axis.text = element_text(size = 9), axis.title.x = element_blank(),plot.title=element_text(hjust=0))
+bp.ts <- ggplot(rand.t.s, aes(pair, mn_var)) + geom_boxplot() +ylab("Mean spring route variance (km)") + ggtitle("c")+ theme(axis.title.y = element_text(size = 9),  axis.text = element_text(size = 9), axis.title.x = element_blank(),plot.title=element_text(hjust=0))
 
 ################Autumn
 n1 <- length(rand.t.f$mn_var[rand.t.f$pair == "Within"])
@@ -595,7 +594,7 @@ Figure S1 produced by LBBG_plasticity_pub.R
 Figure S1. An example of how mean routes were computed. a) The GPS tracks (small points along a line) and core areas (shaded polygons) from ID 5524 during autumn.  GPS points within the core area polygons were removed to create a smoothed route. Colour represents different years. Rectangle indicates area shown in b-d. b) A zoomed in section of the routes  along which 100 equally spaced points were placed (500 points were used in actual analysis), and the beginning positions of the mean route (centre line). Points were coloured sequentially, such that the colour of the points along the GPS route that were averaged together correspond. Large points connected by lines indicate which points along the GPS tracks were averaged to create the mean route.  Faded lines connecting large points on the mean track  indicate the nearest-neighbour locations on the GPS track to these points. c) Location of mean route following 1 iteration, with solid line connecting the GPS points averaged to determine the position of select points along the mean route. The original mean route with nearest-neighbour points are indicated by faded points and lines. New points (teal) were added if points along the mean route were separated by more than 25 km. d) The final mean route, after 100 points were equally placed along the route (500 points used in actual analysis). Points on the mean route are coloured based on their variance (low = purple, high = yellow). Lines indicate the distances  between mean route and GPS routes used to calculate the variance for select points.
 
 ```{r Fig. S2, include = T}
-png("Figs2.png",  width = 16, height = 5.33, units = "cm", res = 300)
+png("Figs2.png",  width = 16, height = 7.33, units = "cm", res = 300)
 plot_grid(bp.ol, bp.tf, bp.ts, nrow = 1)
 dev.off()
 ```
