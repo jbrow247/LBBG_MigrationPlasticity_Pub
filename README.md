@@ -1,7 +1,7 @@
 # LBBG_MigrationPlasticity_Pub
  Cleaned code for publication
 
-This repository contains the publication versions of two scripts that generate the results for the manuscript “High repeatability in migratory behaviours in a generalist seabird regardless of migration strategy”.
+This repository contains the publication versions of two scripts that generate the results for the manuscript “Does migration distance influence intra-individual variation of migratory behaviour in a seabird species with diverse migration strategies?”.  V1 are the scripts for the original manuscript (December 2019). V2 are the scripts used for the revised manuscript (July 2020). 
 
 1) LBBG_plasticity_pub.R is the workhorse containing most data processing, and creation of files for analysis. 
 It generates the data files required for (2). 
