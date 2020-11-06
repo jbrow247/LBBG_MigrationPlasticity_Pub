@@ -57,7 +57,7 @@ gull$winter.arrive <- if_else(yday(gull$winter.arrive)>100,yday(gull$winter.arri
 gull %>% ggplot(aes(yday(winter.depart))) + geom_histogram()
 gull$winter.depart <- yday(gull$winter.depart)
 
-gull <- gull %>% group_by(id) %>% mutate(mn.mig = mean(mig.dist), med.mig = median(mig.dist), n.yrs = length(mig.dist)) %>% arrange(med.mig) %>% ungroup()
+gull <- gull %>% group_by(id) %>% mutate(med.mig = mean(mig.dist), med.mig = median(mig.dist), n.yrs = length(mig.dist)) %>% arrange(med.mig) %>% ungroup()
 gull$id <- factor(gull$id)
 
 ##remove gull dates occuring in a gap. lns 563-572 in LBBG_plasticity_pub.R
@@ -738,27 +738,27 @@ colnames(df) <- c("Number of Seasons", "Number of Individuals - migdist", "Numbe
 kable(df, caption = "Table S1. The number of Lesser black-backed gulls with a given number of nonbreeding seasons included in this study.")
 ```
 
-Figure S1 produced by LBBG_plasticity_pub.R
+Figure S2 produced by LBBG_plasticity_pub.R
 
-Figure S1. An example of how mean routes were computed. a) The GPS tracks (small points along a line) and core areas (shaded polygons) from ID 5524 during autumn.  GPS points within the core area polygons were removed to create a smoothed route. Colour represents different years. Rectangle indicates area shown in b-d. b) A zoomed in section of the routes  along which 100 equally spaced points were placed (500 points were used in actual analysis), and the beginning positions of the mean route (centre line). Points were coloured sequentially, such that the colour of the points along the GPS route that were averaged together correspond. Large points connected by lines indicate which points along the GPS tracks were averaged to create the mean route.  Faded lines connecting large points on the mean track  indicate the nearest-neighbour locations on the GPS track to these points. c) Location of mean route following 1 iteration, with solid line connecting the GPS points averaged to determine the position of select points along the mean route. The original mean route with nearest-neighbour points are indicated by faded points and lines. New points (teal) were added if points along the mean route were separated by more than 25 km. d) The final mean route, after 100 points were equally placed along the route (500 points used in actual analysis). Points on the mean route are coloured based on their variance (low = purple, high = yellow). Lines indicate the distances  between mean route and GPS routes used to calculate the variance for select points.
+Figure S2. An example of how mean routes were computed. a) The GPS tracks (small points along a line) and core areas (shaded polygons) from ID 5524 during autumn.  GPS points within the core area polygons were removed to create a smoothed route. Colour represents different years. Rectangle indicates area shown in b-d. b) A zoomed in section of the routes  along which 100 equally spaced points were placed (500 points were used in actual analysis), and the beginning positions of the mean route (centre line). Points were coloured sequentially, such that the colour of the points along the GPS route that were averaged together correspond. Large points connected by lines indicate which points along the GPS tracks were averaged to create the mean route.  Faded lines connecting large points on the mean track  indicate the nearest-neighbour locations on the GPS track to these points. c) Location of mean route following 1 iteration, with solid line connecting the GPS points averaged to determine the position of select points along the mean route. The original mean route with nearest-neighbour points are indicated by faded points and lines. New points (teal) were added if points along the mean route were separated by more than 25 km. d) The final mean route, after 100 points were equally placed along the route (500 points used in actual analysis). Points on the mean route are coloured based on their variance (low = purple, high = yellow). Lines indicate the distances  between mean route and GPS routes used to calculate the variance for select points.
 
-```{r Fig. S2, include = T}
+```{r Fig. S3, include = T}
 
 
-#png("Figs2.png",  width = 16, height = 5.33, units = "cm", res = 600)
+#png("Figs3.png",  width = 16, height = 5.33, units = "cm", res = 600)
 p.direction <- ggplot(wa.ol, aes(med.mig, resid.var)) + geom_blank() + 
   annotate("segment", x = 0.4, xend = 0.4, y = 0.6, yend = .15, size=.5, arrow=arrow(angle = 10, type = "closed", length = unit(0.1, "inches"))) + annotate("text", x = c(0,0, -.4), y = c(0.05,.675, .35),  label = c("High", "Low", "Variation"), angle = 90, size = 3) + xlim(-1,1) + ylim(0, .75) + theme_void()
 
 
-# pdf("Figure_S2.pdf",  width = 6.3, height = 2.1)
-tiff("Fig_s2.tiff",  width = 20, height = 6, units = "cm", res = 300)
+# pdf("Figure_S3.pdf",  width = 6.3, height = 2.1)
+tiff("Fig_s3.tiff",  width = 20, height = 6, units = "cm", res = 300)
 plot_grid(p.direction,bp.ol, bp.tf, bp.ts, nrow = 1, rel_widths = c(.1,1,1,1))
 dev.off()
 ```
-Figure S2.  A comparison of a) nonbreeding season overlap, b) autumn route variation and c) spring route variation within versus between individuals.
+Figure S3.  A comparison of a) nonbreeding season overlap, b) autumn route variation and c) spring route variation within versus between individuals.
 
-Figure S3.  produced by LBBG_plasticity_pub.R
-Figure S3. Examples of low (left) and high (right) nonbreeding distribution overlap for short (top), mid (middle) and long distance migrants (bottom).  The 25, 50, 75 and 95% contours are delineated, with the 50% contour used to identify core areas represented by the thicker line. The twice daily subsampled points used to make the utilization distributions are shown.  Contours and points are coloured by season. The device number (id) and overlap are reported above each plot.
+Figure S1.  produced by LBBG_plasticity_pub.R
+Figure S1. Examples of low (left) and high (right) nonbreeding distribution overlap for short (top), mid (middle) and long distance migrants (bottom).  The 25, 50, 75 and 95% contours are delineated, with the 50% contour used to identify core areas represented by the thicker line. The twice daily subsampled points used to make the utilization distributions are shown.  Contours and points are coloured by season. The device number (id) and overlap are reported above each plot.
 
 ```{r Fig S4 examples - rouve variation, include = T}
 theme_set(theme_bw())
