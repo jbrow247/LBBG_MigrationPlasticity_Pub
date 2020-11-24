@@ -66,7 +66,7 @@ trackSubSamp = function(df, int=1,unit='hours')
     df.sub[[i]] = unique(df.i[id.sub,])     
     # the function unique makes sure that the rows in df.i[idx,] are unique - so no duplicate points
   }
-
+  
   df.sub <- data.table::rbindlist(df.sub)
 }
 # 
@@ -181,7 +181,7 @@ mig.date <- full_join(arrival.date, departure.date) %>% group_by(id) %>%
 
 gull <- gull %>% select(-start_lon, -start_lat, -birdyear, -id_birdyear, -start_date)
 gull <- gull %>% right_join(mig.date) %>%
-   filter(time <= year.end & time >= year.start) %>%
+  filter(time <= year.end & time >= year.start) %>%
   mutate(id_birdyear = paste(id, birdyear, sep = ".")) %>%
   select(-year.start, -year.end)
 
@@ -278,7 +278,7 @@ for (i in 1:length(daily.by$id)) {
   r.le <- rle(overlap@data$poly) #number of points in each polygon per each temporal visit
   overlap@data$p.visit <- rep(seq(1:length(r.le$lengths)), r.le$lengths) #each temporally distinct visit to a polygon has a unique id (e.g. if moved from poly 1, to poly 2, then back to poly 1, the corresponding p.visits will be 1, 2, and 3 )
   nonbreed.core <- rbind(nonbreed.core, overlap@data) ##overlap points from one id
-  }  
+}  
 
 ## Select first and last point in each new polygon
 core.ee <- nonbreed.core %>% 
@@ -626,7 +626,7 @@ poly.pts.noagg$p.index <- rep(1:length(rle(poly.pts.noagg$poly)$lengths), rle(po
 #find first and last point in core area
 en.ex.noagg <- poly.pts.noagg %>% group_by(id, birdyear, poly, p.index) %>% summarise(enter = min(time), exit = max(time))
 en.ex.noagg$time.in.poly <- difftime(en.ex.noagg$exit, en.ex.noagg$enter, units = "days")
-
+saveRDS(en.ex.noagg, "en.ex.RDS")
 ##Replace points during time bird was in core area, replace with centroid.
 #this stops distance from accumulating during central point foraging, as well as cleans up the actual migratory track. 
 gull.glm$id_birdyear <- paste(gull.glm$id, gull.glm$birdyear, sep = ".")
@@ -653,8 +653,11 @@ all_traj <- nonbreed.UDcentroid %>% left_join(gull.glm) %>%
 ##Only use trajectories with 1 point per day during travel periods (outside of core areas)
 all_traj <- all_traj %>% group_by(id_birdyear, direction) %>% 
   mutate(dur = as.numeric(as.character(difftime(time, lag(time), units = "secs")))) %>% ungroup()
-id.w.gap <- all_traj %>% filter(is.na(poly) & dur >= 3600*24) %>% select(id_birdyear, direction) %>% #points outside polygons have no polygon name (NA)
+id.w.gap <- all_traj %>% filter(is.na(poly) & dur >= 3600*24) %>% select(id_birdyear, direction) %>% 
+  #points outside polygons have no polygon name (NA)
+  
   distinct() %>% mutate(gap = T) #if there is a dur > 24 h, lable this traj with gap = T
+
 all_traj <- all_traj %>% left_join(id.w.gap) %>% filter(is.na(gap)) %>% select(-gap) #remove points from traj where gap = T
 pair.miss <- all_traj %>% select(id, birdyear,direction) %>% distinct() %>% ## Find traj left with no pair
   group_by(id, direction) %>% summarise(n=n()) %>% filter(n==1) %>% 
@@ -662,6 +665,17 @@ pair.miss <- all_traj %>% select(id, birdyear,direction) %>% distinct() %>% ## F
 all_traj <- all_traj %>% left_join(pair.miss) %>% filter(is.na(gap)) %>% select(-gap) # Remove traj with no pair
 
 saveRDS(all_traj, "all_traj.RDS")
+
+## time spent in stopover areas in autumn vs spring ----
+#en.ex.noagg containts arrival and departure times from stopover aeras, per core area
+
+stopover.time.f <- en.ex.noagg %>% left_join(gull.glm %>% select(id, birdyear, col.depart, winter.arrive)) %>%
+  filter(enter >= col.depart & exit <= winter.arrive) %>% ungroup() %>% summarise(so.time.f = sum(time.in.poly))
+
+stopover.time.s <- en.ex.noagg %>% left_join(gull.glm %>% select(id, birdyear, col.arrival, winter.depart)) %>%
+  filter(enter >= winter.depart & exit <= col.arrival) %>% ungroup() %>% summarise(so.time.f = sum(time.in.poly))
+
+as.numeric(stopover.time.f)/sum(as.numeric(stopover.time.f),as.numeric(stopover.time.s)) ## % of total stopover time prior to wintering. 
 
 ## N core areas & core area overlap ----
 ##core areas with no overlap
@@ -687,20 +701,20 @@ for(i in 1:length(nogap_multi.yr.50p)){
   wa.id <- filter(winter.time.poly, id == id.i) %>% pull(poly) ## list of wa polys for that id
   
   for(j in 1:length(wa.id)){ ##for each wa polygon
-  p1 <-  sp[which(p$poly == wa.id[j]),]
-  other.wa <- wa.id[which(wa.id != wa.id[j])]
-  
-  no.overlap.v <- logical(length(other.wa))
-  for(k in 1:length(other.wa)){ ## see if it overlaps with other wa polygons
-    p2 <-sp[which(p$poly == other.wa[k]),]
-    int <- gIntersection(p1,p2)
-    no.overlap.v[k] <- is.null(int) 
-    ## if there is 1 T, then wa in 1 yer doesn't overlap with wa in another year
-  }
-  if(!all(!no.overlap.v)){ ## if there is 1 or more True values (i.e. a wa that doesn't overlap with a wa in another year)
-    no.wa.overlap <- rbind(no.wa.overlap, id.i)
- 
-  }
+    p1 <-  sp[which(p$poly == wa.id[j]),]
+    other.wa <- wa.id[which(wa.id != wa.id[j])]
+    
+    no.overlap.v <- logical(length(other.wa))
+    for(k in 1:length(other.wa)){ ## see if it overlaps with other wa polygons
+      p2 <-sp[which(p$poly == other.wa[k]),]
+      int <- gIntersection(p1,p2)
+      no.overlap.v[k] <- is.null(int) 
+      ## if there is 1 T, then wa in 1 yer doesn't overlap with wa in another year
+    }
+    if(!all(!no.overlap.v)){ ## if there is 1 or more True values (i.e. a wa that doesn't overlap with a wa in another year)
+      no.wa.overlap <- rbind(no.wa.overlap, id.i)
+      
+    }
   }
 }
 no.wa.overlap <- unique(no.wa.overlap)
@@ -733,13 +747,13 @@ for (i in 1:length(nogap_multi.yr.50p)){
       int <- gIntersection(p1,p2)
       no.overlap.v[k] <- is.null(int)
     }
-      if(all(no.overlap.v)){
-        x<-data.frame(id.i, by, p.id)
-        no.so.overlap <- rbind(no.so.overlap, x)  ##core area with no overlap in any year. 
-      }
+    if(all(no.overlap.v)){
+      x<-data.frame(id.i, by, p.id)
+      no.so.overlap <- rbind(no.so.overlap, x)  ##core area with no overlap in any year. 
     }
   }
- 
+}
+
 no.overlap <- select(no.so.overlap, id=id.i, birdyear=by) %>% distinct() %>% mutate(p.no.overlap = T)
 
 ## how many polygons per birdyear?
@@ -784,12 +798,12 @@ days.w.fix %>%  summarise(mean = mean(max.gap), min = min(max.gap),
                           max = max(max.gap), median = median(max.gap)) 
 
 ## WA site fidelity ----
- library(raster)
- nonbreed <- readRDS("nonbreed.RDS")
- nonbreed <- ungroup(nonbreed)
+library(raster)
+nonbreed <- readRDS("nonbreed.RDS")
+nonbreed <- ungroup(nonbreed)
 # 
- wa.pts <- data.frame()
- for (i in 1:length(gull.glm$id)) {
+wa.pts <- data.frame()
+for (i in 1:length(gull.glm$id)) {
   s <- gull.glm[i,]$winter.arrive
   e <- gull.glm[i,]$winter.depart
   id.i <- gull.glm[i,]$id
@@ -1043,13 +1057,13 @@ for(a in 1:length(id.dir$id)){
   tmean <- spsample(tmean, equi_n, type = "regular") ## 500 point equally placed along length of line
   tmean <- tmean@coords
   
-
+  
   traj_l <- lapply(traj_l, FUN = data.frame)
   for(i in 1:length(traj_l)){
     names(traj_l[[i]]) <- c("lon", "lat")
   }
-
-    nn_dist <- NA
+  
+  nn_dist <- NA
   for(l in seq_along(traj_l)){
     x <- traj_l[[l]]
     for(i in seq_along(tmean[,1])){
@@ -1071,7 +1085,7 @@ for(a in 1:length(id.dir$id)){
   tmean$id <- id.dir[[a, "id"]]
   tmean$direction <- id.dir[[a, "direction"]]
   mn_traj <- rbind(mn_traj, tmean)
-
+  
   
 }  
 saveRDS(mn_traj, "mn_traj_limitlat.RDS")
@@ -1086,11 +1100,13 @@ start <- all_traj %>% group_by(id, id_birdyear, direction) %>% filter(row_number
 end <- all_traj %>% group_by(id, id_birdyear, direction) %>% filter(row_number()== n()) %>% 
   ungroup() %>% arrange(direction, id, id_birdyear)%>% rename(elon = lon, elat = lat) %>% 
   select(-time, -poly, -dur)
-x <- all_traj %>% group_by(id, id_birdyear, direction) %>% summarise(n= n()) %>% filter(n <= 10)
 
+##remove traj with 10 or fewer ponts
+x <- all_traj %>% group_by(id, id_birdyear, direction) %>% summarise(n= n()) %>% filter(n <= 10)
 all_traj <- left_join(all_traj, x) %>% filter(is.na(n)) %>% select(-n)
 start <-left_join(start, x) %>% filter(is.na(n)) %>% select(-n)
 end <-left_join(end, x) %>% filter(is.na(n)) %>% select(-n)
+
 ##find distance between each start point, if id != id.  grouped within direction. 
 focal <- full_join(start, end) #start and end points for each bird year
 pair <- focal %>% rename(p.id = id, p.slon = slon, p.slat = slat, p.birdyear = birdyear, #copy of focal, renamed with pair
@@ -1098,17 +1114,20 @@ pair <- focal %>% rename(p.id = id, p.slon = slon, p.slat = slat, p.birdyear = b
                          p.elon = elon, p.elat = elat)
 rand.pair <- expand.grid(1:length(focal$id), 1:length(pair$p.id)) ## create df size of every possible id_birdyear pair
 
+### t(combn(x, 2))
+
+###focal/pair includes all years per individual in both directions
 r.pair <- data.frame()
 for (i in seq_along(rand.pair$Var1)){
   x <-  cbind(focal[rand.pair[i,1],], pair[rand.pair[i,2],])
-  if(x$id == x$p.id | x$direction != x$p.direction) {
+  if(x$id == x$p.id | x$direction != x$p.direction) {  ## pairs need to be from different ids and the same direction
     next
   }
   x$s.dist <- deg.dist(x$slon, x$slat, x$p.slon, x$p.slat)
   x$e.dist <- deg.dist(x$elon, x$elat, x$p.elon, x$p.elat)
-  if(x$s.dist > 250 | x$e.dist > 250){ next }
+  if(x$s.dist > 250 | x$e.dist > 250){ next }   ###if either start or end data or too far apart, move to next pair
   x <- select(x, id, birdyear, p.id, p.birdyear, direction)
-  r.pair<- rbind(r.pair,x)
+  r.pair<- rbind(r.pair,x) ## if within 250 km,  add to r.pair
 }
 
 r.pair <- r.pair[!duplicated(t(apply(r.pair, 1, sort))),]
@@ -1120,6 +1139,7 @@ r.pair.norep <- r.pair %>% group_by(id, p.id, direction) %>% ##for each unique i
   ungroup()
 rm(r.pair)
 ## calculate average trajectory and variance from paired roots. 
+##still includes reverse pairs (e.g. id = 344 &  p.id == 317 and id = 317 & p.id = 344)
 
 
 rand_traj <- data.frame(matrix(ncol = 8, nrow = 0))
@@ -1135,7 +1155,7 @@ for(a in seq_along(r.pair.norep$id)){
   
   ###
   ###This creates a list of equally spaced points (currently n=11, specified in t1_eq), with each trajectory having it's own list element.
-
+  
   equi_n <- 500  ### number of points along the trajectory
   traj_l <- list()
   
@@ -1169,7 +1189,7 @@ for(a in seq_along(r.pair.norep$id)){
   
   ###
   ##Averaging
-    iter_n <- 0
+  iter_n <- 0
   repeat{
     iter_n <- iter_n + 1
     
@@ -1221,12 +1241,12 @@ for(a in seq_along(r.pair.norep$id)){
   tmean <- spsample(tmean, equi_n, type = "regular") ## 100 point equally placed along length of line
   tmean <- tmean@coords
   
-
+  
   traj_l <- lapply(traj_l, FUN = data.frame)
   for(i in 1:length(traj_l)){
     names(traj_l[[i]]) <- c("lon", "lat")
   }
-
+  
   nn_dist <- NA
   for(l in seq_along(traj_l)){
     x <- traj_l[[l]]
@@ -1253,7 +1273,7 @@ for(a in seq_along(r.pair.norep$id)){
   tmean$p.birdyear <- r.pair.norep[[a, "p.birdyear"]]
   tmean$direction <- r.pair.norep[[a, "direction"]]
   rand_traj <- rbind(rand_traj,tmean)
-
+  
 }
 saveRDS(rand_traj, "rand_traj_limlat.RDS")
 
@@ -1527,7 +1547,7 @@ p478 <-
   geom_point(data = pts.d, aes(lon, lat, group = birdyear, col = birdyear), size = .8)+
   ##appearance
   scale_colour_viridis_d(end = .9, option = "C") + scale_fill_viridis_d(begin = .1, end = .8) +
-
+  
   theme(legend.position = "none", axis.title = element_blank(), panel.background = element_rect(fill = "gray93"),
         panel.grid.major = element_line(colour= "white")) +
   coord_fixed(xlim = c(-4, 4.5), 
@@ -1680,11 +1700,11 @@ p871 <-
   geom_polygon(data = p50, aes(fill = id, col = id), size = 1.2, alpha = .2) +
   geom_polygon(data = p25, aes(fill = NA, col = id), size = .5) +
   geom_point(data = pts.d, aes(lon, lat, group = birdyear, col = birdyear), size = .8)+
-    scale_colour_viridis_d(end = .9, option = "C") + scale_fill_viridis_d(begin = .1, end = .7) +
-    theme(legend.position = "none", axis.title = element_blank(), panel.background = element_rect(fill = "gray93"),
-          panel.grid.major = element_line(colour= "white")) +
-    coord_fixed(xlim = c(-5, 3.5), 
-                ylim = c(49,55) ,ratio = 1.2) + 
+  scale_colour_viridis_d(end = .9, option = "C") + scale_fill_viridis_d(begin = .1, end = .7) +
+  theme(legend.position = "none", axis.title = element_blank(), panel.background = element_rect(fill = "gray93"),
+        panel.grid.major = element_line(colour= "white")) +
+  coord_fixed(xlim = c(-5, 3.5), 
+              ylim = c(49,55) ,ratio = 1.2) + 
   ggtitle(paste( " ID = ", ID, ", Overlap = ", round(OL, digits = 2), ", Seasons = ", 
                  gull.glm %>% filter(id == ID & !is.na(mig.dist)) %>% summarise(n = n()) %>% pull(n), sep = ""))
 
@@ -1832,13 +1852,13 @@ SFb <- ggplot(map.world, aes(long, lat, group = group)) +
   geom_polygon(fill = "white", col = "black", size = .25) +
   geom_path(data=t0.0, aes(coords.x1, coords.x2, group = NA), size = 1, alpha = .5, linetype = '21') +
   geom_path(data = t0.1, aes(coords.x1, coords.x2,group = NA), size = 1, alpha = .5, linetype = '21') +
-geom_point(data = t0.0, aes(coords.x1, coords.x2,group = NA, fill = seq), size = 2, shape = 21) +
+  geom_point(data = t0.0, aes(coords.x1, coords.x2,group = NA, fill = seq), size = 2, shape = 21) +
   geom_point(data = t0.1, aes(coords.x1, coords.x2,group = NA, fill = seq), size = 2, shape = 21) +
- geom_path(data = t1.0, aes(x, y,group = NA), size = 1) +
+  geom_path(data = t1.0, aes(x, y,group = NA), size = 1) +
   geom_point(data = t1.0, aes(x, y,group = NA, fill = seq), size = 2, shape = 21) +
   geom_point(data = t0.0[t0.0$seq %in% c(50,59,64,81),], aes(coords.x1, coords.x2,group = NA, fill = seq), size = 4, shape = 21) +
   geom_point(data = t0.1[t0.1$seq %in% c(50,59,64,81),], aes(coords.x1, coords.x2,group = NA, fill = seq), size = 4, shape = 21) +
-geom_point(data = t1.0[t1.0$seq %in% c(50,59,64,81),], aes(x, y,group = NA, fill = seq), size = 4, shape = 21,) +
+  geom_point(data = t1.0[t1.0$seq %in% c(50,59,64,81),], aes(x, y,group = NA, fill = seq), size = 4, shape = 21,) +
   scale_fill_viridis_c(option = "C") + theme(legend.position = "none", axis.title = element_blank(), panel.background = element_rect(fill = "gray93"),
                                              panel.grid.major = element_line(colour= "white")) +
   coord_fixed(xlim = c(-11, -1), 
@@ -1929,9 +1949,9 @@ SFc <- ggplot(map.world, aes(long, lat, group = group)) +
   geom_polygon(fill = "white", col = "black", size = .25) +
   geom_path(data=t0.0, aes(coords.x1, coords.x2, group = NA), size = 1, alpha = .5, linetype = '21') +
   geom_path(data = t0.1, aes(coords.x1, coords.x2,group = NA), size = 1, alpha = .5, linetype = '21') +
- geom_point(data = t0.0, aes(coords.x1, coords.x2,group = NA, fill = seq), size = 2, shape = 21) +
+  geom_point(data = t0.0, aes(coords.x1, coords.x2,group = NA, fill = seq), size = 2, shape = 21) +
   geom_point(data = t0.1, aes(coords.x1, coords.x2,group = NA, fill = seq), size = 2, shape = 21) +
- geom_path(data = t1.0, aes(x, y,group = NA), size = 1, alpha = .25) +
+  geom_path(data = t1.0, aes(x, y,group = NA), size = 1, alpha = .25) +
   geom_point(data = t1.0, aes(x, y,group = NA, fill = seq), size = 2, shape = 21, alpha = .25) +
   geom_path(data = t1.1, aes(x, y,group = NA), size = 1) +
   geom_point(data = new.pts, aes(x, y,group = NA), fill = '#20A387FF', size = 2, shape = 21) +
@@ -2010,7 +2030,7 @@ repeat{
     tmean1 <- rbind(tmean1, tmean[i,])
   }
   tmean <- tmean1
-
+  
 }
 
 tmean <-  SpatialLines(list(Lines(list(Line(cbind(tmean$x, tmean$y))), "id")))
@@ -2076,7 +2096,7 @@ SFd<-  ggplot(map.world, aes(long, lat, group = group)) +
   geom_path(data = t0.1, aes(coords.x1, coords.x2,group = NA), size = 1, alpha = .5, linetype = '21') +
   geom_point(data = t0.0, aes(coords.x1, coords.x2,group = NA), size = 2, shape = 21, fill = "black") +
   geom_point(data = t0.1, aes(coords.x1, coords.x2,group = NA), size = 2, shape = 21, fill = "black") +
-
+  
   geom_point(data = nn.ex2, aes(x,y,group = NA, fill = wvar), size = 4, shape = 21) +
   geom_path(data = tmean, aes(mn.lon, mn.lat, group = NA), size = 1) +
   geom_point(data = tmean, aes(mn.lon, mn.lat, group = NA, fill = within.var), size = 2, shape = 21) +
@@ -2086,6 +2106,6 @@ SFd<-  ggplot(map.world, aes(long, lat, group = group)) +
   coord_fixed(xlim = c(-11, -1), 
               ylim = c(37, 44),ratio = 1.2)   
 
-png("FigS3.png",  width = 20, height = 16, units = "cm", res = 400)
+png("FigS2.png",  width = 20, height = 16, units = "cm", res = 400)
 cowplot::plot_grid(SFa,SFb,SFc,SFd, nrow = 2)
 dev.off()
