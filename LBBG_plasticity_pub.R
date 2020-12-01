@@ -66,7 +66,7 @@ trackSubSamp = function(df, int=1,unit='hours')
     df.sub[[i]] = unique(df.i[id.sub,])     
     # the function unique makes sure that the rows in df.i[idx,] are unique - so no duplicate points
   }
-  
+
   df.sub <- data.table::rbindlist(df.sub)
 }
 # 
@@ -181,7 +181,7 @@ mig.date <- full_join(arrival.date, departure.date) %>% group_by(id) %>%
 
 gull <- gull %>% select(-start_lon, -start_lat, -birdyear, -id_birdyear, -start_date)
 gull <- gull %>% right_join(mig.date) %>%
-  filter(time <= year.end & time >= year.start) %>%
+   filter(time <= year.end & time >= year.start) %>%
   mutate(id_birdyear = paste(id, birdyear, sep = ".")) %>%
   select(-year.start, -year.end)
 
@@ -232,7 +232,7 @@ ud.grid <- mkgrid(lat=snonbreed.pt$coords.x2,
 
 # get map
 map <- getMap("coarse")
-laea.map <- spTransform(map, CRS(proj.laea))
+laea.map <- spTransform(map, CRS(laea.proj))
 laea.map <- fortify(laea.map)    
 map <- fortify(map)
 
@@ -278,7 +278,7 @@ for (i in 1:length(daily.by$id)) {
   r.le <- rle(overlap@data$poly) #number of points in each polygon per each temporal visit
   overlap@data$p.visit <- rep(seq(1:length(r.le$lengths)), r.le$lengths) #each temporally distinct visit to a polygon has a unique id (e.g. if moved from poly 1, to poly 2, then back to poly 1, the corresponding p.visits will be 1, 2, and 3 )
   nonbreed.core <- rbind(nonbreed.core, overlap@data) ##overlap points from one id
-}  
+  }  
 
 ## Select first and last point in each new polygon
 core.ee <- nonbreed.core %>% 
@@ -598,7 +598,7 @@ centroid.noagg <- data.table::rbindlist(centroid.noagg)
 tmp <- poly.df.noagg %>% select(-lat, -lon, -order) %>% distinct()
 centroid.noagg <-  left_join(centroid.noagg, tmp)
 
-centroid.noagg$birdyear <- as.numeric(centroid.noagg$birdyear) - 1  #birdyear was re-numbered starting at 1 instead of 0, so change back to join
+centroid.noagg$birdyear <- as.numeric(centroid.noagg$birdyear) #- 1  #birdyear was re-numbered starting at 1 instead of 0, so change back to join
 
 ##select only points in the polygons
 nonbreed.nogap <- ungroup(nonbreed.nogap) ### use non subsampled for duration calculation. 
@@ -626,7 +626,7 @@ poly.pts.noagg$p.index <- rep(1:length(rle(poly.pts.noagg$poly)$lengths), rle(po
 #find first and last point in core area
 en.ex.noagg <- poly.pts.noagg %>% group_by(id, birdyear, poly, p.index) %>% summarise(enter = min(time), exit = max(time))
 en.ex.noagg$time.in.poly <- difftime(en.ex.noagg$exit, en.ex.noagg$enter, units = "days")
-saveRDS(en.ex.noagg, "en.ex.RDS")
+
 ##Replace points during time bird was in core area, replace with centroid.
 #this stops distance from accumulating during central point foraging, as well as cleans up the actual migratory track. 
 gull.glm$id_birdyear <- paste(gull.glm$id, gull.glm$birdyear, sep = ".")
@@ -653,11 +653,8 @@ all_traj <- nonbreed.UDcentroid %>% left_join(gull.glm) %>%
 ##Only use trajectories with 1 point per day during travel periods (outside of core areas)
 all_traj <- all_traj %>% group_by(id_birdyear, direction) %>% 
   mutate(dur = as.numeric(as.character(difftime(time, lag(time), units = "secs")))) %>% ungroup()
-id.w.gap <- all_traj %>% filter(is.na(poly) & dur >= 3600*24) %>% select(id_birdyear, direction) %>% 
-  #points outside polygons have no polygon name (NA)
-  
+id.w.gap <- all_traj %>% filter(is.na(poly) & dur >= 3600*24) %>% select(id_birdyear, direction) %>% #points outside polygons have no polygon name (NA)
   distinct() %>% mutate(gap = T) #if there is a dur > 24 h, lable this traj with gap = T
-
 all_traj <- all_traj %>% left_join(id.w.gap) %>% filter(is.na(gap)) %>% select(-gap) #remove points from traj where gap = T
 pair.miss <- all_traj %>% select(id, birdyear,direction) %>% distinct() %>% ## Find traj left with no pair
   group_by(id, direction) %>% summarise(n=n()) %>% filter(n==1) %>% 
@@ -665,17 +662,6 @@ pair.miss <- all_traj %>% select(id, birdyear,direction) %>% distinct() %>% ## F
 all_traj <- all_traj %>% left_join(pair.miss) %>% filter(is.na(gap)) %>% select(-gap) # Remove traj with no pair
 
 saveRDS(all_traj, "all_traj.RDS")
-
-## time spent in stopover areas in autumn vs spring ----
-#en.ex.noagg containts arrival and departure times from stopover aeras, per core area
-
-stopover.time.f <- en.ex.noagg %>% left_join(gull.glm %>% select(id, birdyear, col.depart, winter.arrive)) %>%
-  filter(enter >= col.depart & exit <= winter.arrive) %>% ungroup() %>% summarise(so.time.f = sum(time.in.poly))
-
-stopover.time.s <- en.ex.noagg %>% left_join(gull.glm %>% select(id, birdyear, col.arrival, winter.depart)) %>%
-  filter(enter >= winter.depart & exit <= col.arrival) %>% ungroup() %>% summarise(so.time.f = sum(time.in.poly))
-
-as.numeric(stopover.time.f)/sum(as.numeric(stopover.time.f),as.numeric(stopover.time.s)) ## % of total stopover time prior to wintering. 
 
 ## N core areas & core area overlap ----
 ##core areas with no overlap
@@ -701,20 +687,20 @@ for(i in 1:length(nogap_multi.yr.50p)){
   wa.id <- filter(winter.time.poly, id == id.i) %>% pull(poly) ## list of wa polys for that id
   
   for(j in 1:length(wa.id)){ ##for each wa polygon
-    p1 <-  sp[which(p$poly == wa.id[j]),]
-    other.wa <- wa.id[which(wa.id != wa.id[j])]
-    
-    no.overlap.v <- logical(length(other.wa))
-    for(k in 1:length(other.wa)){ ## see if it overlaps with other wa polygons
-      p2 <-sp[which(p$poly == other.wa[k]),]
-      int <- gIntersection(p1,p2)
-      no.overlap.v[k] <- is.null(int) 
-      ## if there is 1 T, then wa in 1 yer doesn't overlap with wa in another year
-    }
-    if(!all(!no.overlap.v)){ ## if there is 1 or more True values (i.e. a wa that doesn't overlap with a wa in another year)
-      no.wa.overlap <- rbind(no.wa.overlap, id.i)
-      
-    }
+  p1 <-  sp[which(p$poly == wa.id[j]),]
+  other.wa <- wa.id[which(wa.id != wa.id[j])]
+  
+  no.overlap.v <- logical(length(other.wa))
+  for(k in 1:length(other.wa)){ ## see if it overlaps with other wa polygons
+    p2 <-sp[which(p$poly == other.wa[k]),]
+    int <- gIntersection(p1,p2)
+    no.overlap.v[k] <- is.null(int) 
+    ## if there is 1 T, then wa in 1 yer doesn't overlap with wa in another year
+  }
+  if(!all(!no.overlap.v)){ ## if there is 1 or more True values (i.e. a wa that doesn't overlap with a wa in another year)
+    no.wa.overlap <- rbind(no.wa.overlap, id.i)
+ 
+  }
   }
 }
 no.wa.overlap <- unique(no.wa.overlap)
@@ -747,20 +733,20 @@ for (i in 1:length(nogap_multi.yr.50p)){
       int <- gIntersection(p1,p2)
       no.overlap.v[k] <- is.null(int)
     }
-    if(all(no.overlap.v)){
-      x<-data.frame(id.i, by, p.id)
-      no.so.overlap <- rbind(no.so.overlap, x)  ##core area with no overlap in any year. 
+      if(all(no.overlap.v)){
+        x<-data.frame(id.i, by, p.id)
+        no.so.overlap <- rbind(no.so.overlap, x)  ##core area with no overlap in any year. 
+      }
     }
   }
-}
-
+ 
 no.overlap <- select(no.so.overlap, id=id.i, birdyear=by) %>% distinct() %>% mutate(p.no.overlap = T)
 
 ## how many polygons per birdyear?
 remove(n.winter.area)
 n.winter.area <- data.frame()
 for (i in 1:length(nogap_multi.yr.50p)){
-  year <- levels(unique(nogap_multi.yr.50p[[i]]@data$birdyear))  #vector of year ids
+  year <- unique(nogap_multi.yr.50p[[i]]@data$birdyear)  #vector of year ids
   id <- id.v[i] #vector of bird ids
   p <- nogap_multi.yr.50p[[i]]@data
   p <- select(p, id, birdyear) %>% distinct()
@@ -798,12 +784,12 @@ days.w.fix %>%  summarise(mean = mean(max.gap), min = min(max.gap),
                           max = max(max.gap), median = median(max.gap)) 
 
 ## WA site fidelity ----
-library(raster)
-nonbreed <- readRDS("nonbreed.RDS")
-nonbreed <- ungroup(nonbreed)
+ library(raster)
+ nonbreed <- readRDS("nonbreed.RDS")
+ nonbreed <- ungroup(nonbreed)
 # 
-wa.pts <- data.frame()
-for (i in 1:length(gull.glm$id)) {
+ wa.pts <- data.frame()
+ for (i in 1:length(gull.glm$id)) {
   s <- gull.glm[i,]$winter.arrive
   e <- gull.glm[i,]$winter.depart
   id.i <- gull.glm[i,]$id
@@ -830,6 +816,37 @@ wau.traj.l <- lapply(wau.laea.l, function(wa.laea){
   adehabitatLT::as.ltraj(as.data.frame(wa.laea@coords), date = wa.laea@data$time,
                          id = wa.laea@data$birdyear,
                          slsp = "missing", proj4string = CRS(proj4string(wa.laea)))})
+saveRDS(wau.laea.l, "wau.laea.l.RDS")
+saveRDS(wau.traj.l, "wau.traj.l.RDS")
+save.image("ln831.RData")
+rm(list = ls())
+wau.laea.l <- readRDS("wau.laea.l.RDS")
+wau.traj.l <- readRDS("wau.traj.l.RDS")
+laea.proj <- "+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +towgs84=0,0,0,0,0,0,0 +units=m"
+
+mkgrid <- function(lat=NULL, lon = NULL, resolution=10000, buffer = 100000, 
+                   projection = laea.proj  ){
+  #lat is a vector of latitudes
+  #lon is a vector of longitudes
+  #resolution is the cell size of the raster. 
+  #1 = ~ 133X165 km
+  #.1 = ~ 13.9 x 17.1 km
+  #.01 ~ 1.39 x 1.72 km     .... in WSG84
+  #buffer adds space beyond the points in the grid. a buffer of 1 should equal ~ 111 km
+  #projection: projection of the data.
+  
+  ##projection = laea, measured in m
+  #resolution 1 000 = 1 km2...
+  
+  
+  xmax <- max(lon)
+  xmin <- min(lon)
+  ymax <- max(lat)
+  ymin <- min(lat)
+  extent<- matrix(c(xmin - buffer, xmax + buffer, ymin - buffer, ymax + buffer), ncol=2)
+  extent <- SpatialPoints(coords = extent, proj4string = CRS(projection))        # the data is in WSG84 lat-lon
+  rast<- ascgen(extent, cellsize=resolution)
+}
 
 ##make grid
 brbu.grid <- lapply(wau.laea.l[1:41], function(wa.grid) {
@@ -854,7 +871,7 @@ for(i in 20:41){
   wa_overlap.1[[i]] <- kerneloverlaphr(brb.i, meth = "BA", percent = 95, conditional = T)
 }
 
-
+saveRDS(wa_overlap.1, "wa_overlap.1.RDS")
 ##individual brbs
 ##make grid
 brbu.grid <- lapply(wau.laea.l[42:82], function(wa.grid) {
@@ -874,30 +891,89 @@ for(i in 1:41){
 }
 
 ##save environment  (ln861_2506.RData)
+saveRDS(wa_overlap.2, "wa_overlap.2.RDS")
+rm(list = ls())
+wau.laea.l <- readRDS("wau.laea.l.RDS")
+wau.traj.l <- readRDS("wau.traj.l.RDS")
+laea.proj <- "+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +towgs84=0,0,0,0,0,0,0 +units=m"
 
-
+mkgrid <- function(lat=NULL, lon = NULL, resolution=10000, buffer = 100000, 
+                   projection = laea.proj  ){
+  #lat is a vector of latitudes
+  #lon is a vector of longitudes
+  #resolution is the cell size of the raster. 
+  #1 = ~ 133X165 km
+  #.1 = ~ 13.9 x 17.1 km
+  #.01 ~ 1.39 x 1.72 km     .... in WSG84
+  #buffer adds space beyond the points in the grid. a buffer of 1 should equal ~ 111 km
+  #projection: projection of the data.
+  
+  ##projection = laea, measured in m
+  #resolution 1 000 = 1 km2...
+  
+  
+  xmax <- max(lon)
+  xmin <- min(lon)
+  ymax <- max(lat)
+  ymin <- min(lat)
+  extent<- matrix(c(xmin - buffer, xmax + buffer, ymin - buffer, ymax + buffer), ncol=2)
+  extent <- SpatialPoints(coords = extent, proj4string = CRS(projection))        # the data is in WSG84 lat-lon
+  rast<- ascgen(extent, cellsize=resolution)
+}
 ##skipped 19 b/c takes too much memory!!!
 brbu.grid <-  mkgrid(lat = wau.laea.l[[19]]@coords[,2], lon = wau.laea.l[[19]]@coords[,1],
                      resolution = 500, buffer = 500)
 Du.l <-  BRB.D(wau.traj.l[[19]], Tmax = 3*3600, Lmin= 20) ## one bird has a point every 3 hours
 
 gc()
-brb.i <- BRB(wau.traj.l[[19]],Du.l, filtershort = F, Tmax = 3*3600, Lmin= 20, hmin =150, type = "UD", grid = brbu.grid)
-
-#saveRDS(nogap_multi.yr, "nogap_multi.yr.RDS")
-# rm(wau.traj.l, nogap_multi.yr, brbu.grid)
-#rm(list = ls()[which(!(ls() %in% c("brb.i", "wa_overlap.1","wa_overlap.2")))])
+x <- BRB(wau.traj.l[[19]],Du.l, filtershort = F, Tmax = 3*3600, Lmin= 20, hmin =150, type = "UD", grid = brbu.grid)
 gc()
 
 ##null slot in overlap.1 b/c missing 19
 ##If memory limit, open kerneloverlaphr function and run through loop manually. 
+#wa_overlap.19 <- kerneloverlaphr(x, meth = "BA", percent = 95, conditional = T)
+vol <- getvolumeUD(x)
+x <- lapply(x, function(y) {
+  coo <- coordinates(y)
+  y[order(coo[, 1], coo[, 2]), ]
+})
+vol <- lapply(vol, function(y) {
+  coo <- coordinates(y)
+  y[order(coo[, 1], coo[, 2]), ]
+})
+gp <- gridparameters(vol[[1]])
+res <- matrix(0, ncol = length(x), nrow = length(x))
+for (i in 1:length(x)) {
+  for (j in 1:i) {
+      vi <- x[[i]][[1]]
+      vj <- x[[j]][[1]]
+      ai <- vol[[i]][[1]]
+      aj <- vol[[j]][[1]]
+      ai[ai <= percent] <- 1
+      ai[ai > percent] <- 0
+      aj[aj <= percent] <- 1
+      aj[aj > percent] <- 0
+     
+        vi <- vi * ai
+        vj <- vj * aj
+        res[j, i] <- res[i, j] <- sum(sqrt(vi) * sqrt(vj)) * 
+          (gp[1, 2]^2)
 
-wa_overlap.1[[19]] <- kerneloverlaphr(brb.i, meth = "BA", percent = 95, conditional = T)
+  }
+}
+  
+  rownames(res) <- names(x)
+  colnames(res) <- names(x)
 
+  wa_overlap.19 <- res
+
+wa_overlap.1 <- readRDS("wa_overlap.1.RDS")
+wa_overlap.1[[19]] <- wa_overlap.19
+wa_overlap.2 <- readRDS("wa_overlap.2.RDS")
 wa_overlap <- c(wa_overlap.1,wa_overlap.2)
 saveRDS(wa_overlap, "wa_overlap_3035.RDS")
-#rm(vol)
-##load("D:/surfdrive/PhD/Research/Plasticity of migratory strategies/R/Publication_version/ln861_2506.RData")
+
+load("ln831.RData")
 wa_overlap <- readRDS("wa_overlap_3035.RDS")
 
 sf_range  <- data.frame(matrix(ncol = 4, nrow = length(idu.v)))
@@ -914,15 +990,69 @@ for(i in 1:length(wa_overlap)){
 }
 colnames(sf_range) <- c("sf_min_overlap", "sf_max_overlap", "sf_mn_overlap", "id")
 saveRDS(sf_range, "wa_overlap_range_3035.RDS")
-
-#sf_range <- readRDS("wa_overlap_range.RDS")
-
 gull.glm <- left_join(gull.glm, sf_range)
 
 ## Gull.glm export, add days with fix ----
 gull.glm <- left_join(gull.glm, days.w.fix) %>% arrange(mig.dist)
 saveRDS(gull.glm, "gull.glm.RDS")
+save.image("ln964.RData")
+## Overlap of random pairs ----
+##### polygon overlap for randomization tests
+#####Find pairings
 
+start <- nonbreed.nogap.d %>% left_join(gull.glm) %>%
+  select(id, id_birdyear, birdyear, slat = start_lat, slon = start_lon) %>% distinct()
+end <- centroid %>% group_by(id, birdyear) %>% filter(uniq.p %in% winter.poly.v) %>% 
+  ungroup() %>% select(id, birdyear, elat = lat, elon =lon) %>% 
+  mutate(id_birdyear = paste(id, birdyear, sep = "."), birdyear = as.numeric(as.character(birdyear)))
+
+##find distance between each start point, if id != id.  grouped within direction. 
+focal <- full_join(start, end)
+pair <- focal %>% rename(p.id = id, p.slon = slon, p.slat = slat, p.birdyear = birdyear,
+                         p.id_birdyear = id_birdyear, p.elon = elon, p.elat = elat)
+rand.pair.ol <- expand.grid(1:length(focal$id), 1:length(pair$p.id))
+
+r.pair.ol <- data.frame()
+for (i in seq_along(rand.pair.ol$Var1)){
+  x <-  cbind(focal[rand.pair.ol[i,1],], pair[rand.pair.ol[i,2],])
+  if(x$id == x$p.id) {
+    next
+  }
+  x$s.dist <- deg.dist(x$slon, x$slat, x$p.slon, x$p.slat)
+  x$e.dist <- deg.dist(x$elon, x$elat, x$p.elon, x$p.elat)
+  if(x$s.dist > 250 | x$e.dist > 250){  ##start and end need to be within 250k
+    next
+  }
+  x <- select(x, id, birdyear, id_birdyear, p.id, p.birdyear, p.id_birdyear)
+  r.pair.ol <- rbind(r.pair.ol, x)
+}
+
+## Between individual UD pairs
+r.pair.ol <- r.pair.ol[!duplicated(t(apply(r.pair.ol, 1, sort))), ]
+
+
+r.pair.ol.norep <- r.pair.ol %>% select(-id_birdyear, -p.id_birdyear) %>%
+  group_by(id, p.id) %>% ##for each unique id pair & direction
+  sample_n(1) %>% ##randomly select 1 birdyear route per id
+  ungroup() %>% mutate(id_birdyear = paste(id, birdyear, sep = "."), 
+                       p.id_birdyear = paste(p.id, p.birdyear, sep = "."))
+
+###calculate between id overlaps
+#readRDS("nogap_multi.yr.RDS")
+by.poly <- unlist(nogap_multi.yr)
+by.poly.v <- names(by.poly)
+rand.UD_overlap <- lapply(1:length(r.pair.ol.norep$id), function(i){
+  f.poly <- by.poly[[which(by.poly.v == r.pair.ol.norep[i,]$id_birdyear)]]
+  p.poly <- by.poly[[which(by.poly.v == r.pair.ol.norep[i,]$p.id_birdyear)]]
+  ol <- list(f.poly, p.poly)
+  names(ol) <- c(r.pair.ol.norep[i,]$id_birdyear,r.pair.ol.norep[i,]$p.id_birdyear)
+  class(ol) <- "estUDm" 
+  kerneloverlaphr(ol, meth = "BA", percent = 95, conditional = T)
+})
+
+saveRDS(rand.UD_overlap,"rand_overlap.RDS")
+saveRDS(r.pair.ol.norep, "r.pair.ol.RDS")
+save.image("ln1021.RData")
 ## Migration route variation ----
 
 ### trajectory averaging
@@ -1057,13 +1187,13 @@ for(a in 1:length(id.dir$id)){
   tmean <- spsample(tmean, equi_n, type = "regular") ## 500 point equally placed along length of line
   tmean <- tmean@coords
   
-  
+
   traj_l <- lapply(traj_l, FUN = data.frame)
   for(i in 1:length(traj_l)){
     names(traj_l[[i]]) <- c("lon", "lat")
   }
-  
-  nn_dist <- NA
+
+    nn_dist <- NA
   for(l in seq_along(traj_l)){
     x <- traj_l[[l]]
     for(i in seq_along(tmean[,1])){
@@ -1085,7 +1215,7 @@ for(a in 1:length(id.dir$id)){
   tmean$id <- id.dir[[a, "id"]]
   tmean$direction <- id.dir[[a, "direction"]]
   mn_traj <- rbind(mn_traj, tmean)
-  
+
   
 }  
 saveRDS(mn_traj, "mn_traj_limitlat.RDS")
@@ -1100,13 +1230,11 @@ start <- all_traj %>% group_by(id, id_birdyear, direction) %>% filter(row_number
 end <- all_traj %>% group_by(id, id_birdyear, direction) %>% filter(row_number()== n()) %>% 
   ungroup() %>% arrange(direction, id, id_birdyear)%>% rename(elon = lon, elat = lat) %>% 
   select(-time, -poly, -dur)
-
-##remove traj with 10 or fewer ponts
 x <- all_traj %>% group_by(id, id_birdyear, direction) %>% summarise(n= n()) %>% filter(n <= 10)
+
 all_traj <- left_join(all_traj, x) %>% filter(is.na(n)) %>% select(-n)
 start <-left_join(start, x) %>% filter(is.na(n)) %>% select(-n)
 end <-left_join(end, x) %>% filter(is.na(n)) %>% select(-n)
-
 ##find distance between each start point, if id != id.  grouped within direction. 
 focal <- full_join(start, end) #start and end points for each bird year
 pair <- focal %>% rename(p.id = id, p.slon = slon, p.slat = slat, p.birdyear = birdyear, #copy of focal, renamed with pair
@@ -1114,20 +1242,17 @@ pair <- focal %>% rename(p.id = id, p.slon = slon, p.slat = slat, p.birdyear = b
                          p.elon = elon, p.elat = elat)
 rand.pair <- expand.grid(1:length(focal$id), 1:length(pair$p.id)) ## create df size of every possible id_birdyear pair
 
-### t(combn(x, 2))
-
-###focal/pair includes all years per individual in both directions
 r.pair <- data.frame()
 for (i in seq_along(rand.pair$Var1)){
   x <-  cbind(focal[rand.pair[i,1],], pair[rand.pair[i,2],])
-  if(x$id == x$p.id | x$direction != x$p.direction) {  ## pairs need to be from different ids and the same direction
+  if(x$id == x$p.id | x$direction != x$p.direction) {
     next
   }
   x$s.dist <- deg.dist(x$slon, x$slat, x$p.slon, x$p.slat)
   x$e.dist <- deg.dist(x$elon, x$elat, x$p.elon, x$p.elat)
-  if(x$s.dist > 250 | x$e.dist > 250){ next }   ###if either start or end data or too far apart, move to next pair
+  if(x$s.dist > 250 | x$e.dist > 250){ next }
   x <- select(x, id, birdyear, p.id, p.birdyear, direction)
-  r.pair<- rbind(r.pair,x) ## if within 250 km,  add to r.pair
+  r.pair<- rbind(r.pair,x)
 }
 
 r.pair <- r.pair[!duplicated(t(apply(r.pair, 1, sort))),]
@@ -1139,7 +1264,6 @@ r.pair.norep <- r.pair %>% group_by(id, p.id, direction) %>% ##for each unique i
   ungroup()
 rm(r.pair)
 ## calculate average trajectory and variance from paired roots. 
-##still includes reverse pairs (e.g. id = 344 &  p.id == 317 and id = 317 & p.id = 344)
 
 
 rand_traj <- data.frame(matrix(ncol = 8, nrow = 0))
@@ -1155,7 +1279,7 @@ for(a in seq_along(r.pair.norep$id)){
   
   ###
   ###This creates a list of equally spaced points (currently n=11, specified in t1_eq), with each trajectory having it's own list element.
-  
+
   equi_n <- 500  ### number of points along the trajectory
   traj_l <- list()
   
@@ -1189,7 +1313,7 @@ for(a in seq_along(r.pair.norep$id)){
   
   ###
   ##Averaging
-  iter_n <- 0
+    iter_n <- 0
   repeat{
     iter_n <- iter_n + 1
     
@@ -1241,12 +1365,12 @@ for(a in seq_along(r.pair.norep$id)){
   tmean <- spsample(tmean, equi_n, type = "regular") ## 100 point equally placed along length of line
   tmean <- tmean@coords
   
-  
+
   traj_l <- lapply(traj_l, FUN = data.frame)
   for(i in 1:length(traj_l)){
     names(traj_l[[i]]) <- c("lon", "lat")
   }
-  
+
   nn_dist <- NA
   for(l in seq_along(traj_l)){
     x <- traj_l[[l]]
@@ -1273,7 +1397,7 @@ for(a in seq_along(r.pair.norep$id)){
   tmean$p.birdyear <- r.pair.norep[[a, "p.birdyear"]]
   tmean$direction <- r.pair.norep[[a, "direction"]]
   rand_traj <- rbind(rand_traj,tmean)
-  
+
 }
 saveRDS(rand_traj, "rand_traj_limlat.RDS")
 
@@ -1288,63 +1412,9 @@ rand_traj_sum$pair <- "Between"
 saveRDS(rand_traj_sum, "rand_traj_sum.RDS") ##Randomization test carried out in results_d4
 saveRDS(r.pair.norep, "r_pair_traj.RDS")
 
-## Overlap of random pairs ----
-##### polygon overlap for randomization tests
-#####Find pairings
 
-start <- nonbreed.nogap.d %>% left_join(gull.glm) %>%
-  select(id, id_birdyear, birdyear, slat = start_lat, slon = start_lon) %>% distinct()
-end <- centroid %>% group_by(id, birdyear) %>% filter(uniq.p %in% winter.poly.v) %>% 
-  ungroup() %>% select(id, birdyear, elat = lat, elon =lon) %>% 
-  mutate(id_birdyear = paste(id, birdyear, sep = "."), birdyear = as.numeric(as.character(birdyear)))
-
-##find distance between each start point, if id != id.  grouped within direction. 
-focal <- full_join(start, end)
-pair <- focal %>% rename(p.id = id, p.slon = slon, p.slat = slat, p.birdyear = birdyear,
-                         p.id_birdyear = id_birdyear, p.elon = elon, p.elat = elat)
-rand.pair.ol <- expand.grid(1:length(focal$id), 1:length(pair$p.id))
-
-r.pair.ol <- data.frame()
-for (i in seq_along(rand.pair.ol$Var1)){
-  x <-  cbind(focal[rand.pair.ol[i,1],], pair[rand.pair.ol[i,2],])
-  if(x$id == x$p.id) {
-    next
-  }
-  x$s.dist <- deg.dist(x$slon, x$slat, x$p.slon, x$p.slat)
-  x$e.dist <- deg.dist(x$elon, x$elat, x$p.elon, x$p.elat)
-  if(x$s.dist > 250 | x$e.dist > 250){  ##start and end need to be within 250k
-    next
-  }
-  x <- select(x, id, birdyear, id_birdyear, p.id, p.birdyear, p.id_birdyear)
-  r.pair.ol <- rbind(r.pair.ol, x)
-}
-
-## Between individual UD pairs
-r.pair.ol <- r.pair.ol[!duplicated(t(apply(r.pair.ol, 1, sort))), ]
-
-
-r.pair.ol.norep <- r.pair.ol %>% select(-id_birdyear, -p.id_birdyear) %>%
-  group_by(id, p.id) %>% ##for each unique id pair & direction
-  sample_n(1) %>% ##randomly select 1 birdyear route per id
-  ungroup() %>% mutate(id_birdyear = paste(id, birdyear, sep = "."), 
-                       p.id_birdyear = paste(p.id, p.birdyear, sep = "."))
-
-###calculate between id overlaps
-readRDS("nogap_multi.yr.RDS")
-by.poly <- unlist(nogap_multi.yr)
-by.poly.v <- names(by.poly)
-rand.UD_overlap <- lapply(1:length(r.pair.ol.norep$id), function(i){
-  f.poly <- by.poly[[which(by.poly.v == r.pair.ol.norep[i,]$id_birdyear)]]
-  p.poly <- by.poly[[which(by.poly.v == r.pair.ol.norep[i,]$p.id_birdyear)]]
-  ol <- list(f.poly, p.poly)
-  names(ol) <- c(r.pair.ol.norep[i,]$id_birdyear,r.pair.ol.norep[i,]$p.id_birdyear)
-  class(ol) <- "estUDm" 
-  kerneloverlaphr(ol, meth = "BA", percent = 95, conditional = T)
-})
-
-saveRDS(rand.UD_overlap,"rand_overlap.RDS")
-saveRDS(r.pair.ol.norep, "r.pair.ol.RDS")
 ##Route var examples ----
+library(cowplot)
 map.world <- rworldmap::getMap("low")
 map.world <- fortify(map.world)
 example.id <- c(5554,833,608, 782, 537, 4024,5337,540, 5060,5134,344)
@@ -1547,7 +1617,7 @@ p478 <-
   geom_point(data = pts.d, aes(lon, lat, group = birdyear, col = birdyear), size = .8)+
   ##appearance
   scale_colour_viridis_d(end = .9, option = "C") + scale_fill_viridis_d(begin = .1, end = .8) +
-  
+
   theme(legend.position = "none", axis.title = element_blank(), panel.background = element_rect(fill = "gray93"),
         panel.grid.major = element_line(colour= "white")) +
   coord_fixed(xlim = c(-4, 4.5), 
@@ -1700,11 +1770,11 @@ p871 <-
   geom_polygon(data = p50, aes(fill = id, col = id), size = 1.2, alpha = .2) +
   geom_polygon(data = p25, aes(fill = NA, col = id), size = .5) +
   geom_point(data = pts.d, aes(lon, lat, group = birdyear, col = birdyear), size = .8)+
-  scale_colour_viridis_d(end = .9, option = "C") + scale_fill_viridis_d(begin = .1, end = .7) +
-  theme(legend.position = "none", axis.title = element_blank(), panel.background = element_rect(fill = "gray93"),
-        panel.grid.major = element_line(colour= "white")) +
-  coord_fixed(xlim = c(-5, 3.5), 
-              ylim = c(49,55) ,ratio = 1.2) + 
+    scale_colour_viridis_d(end = .9, option = "C") + scale_fill_viridis_d(begin = .1, end = .7) +
+    theme(legend.position = "none", axis.title = element_blank(), panel.background = element_rect(fill = "gray93"),
+          panel.grid.major = element_line(colour= "white")) +
+    coord_fixed(xlim = c(-5, 3.5), 
+                ylim = c(49,55) ,ratio = 1.2) + 
   ggtitle(paste( " ID = ", ID, ", Overlap = ", round(OL, digits = 2), ", Seasons = ", 
                  gull.glm %>% filter(id == ID & !is.na(mig.dist)) %>% summarise(n = n()) %>% pull(n), sep = ""))
 
@@ -1852,13 +1922,13 @@ SFb <- ggplot(map.world, aes(long, lat, group = group)) +
   geom_polygon(fill = "white", col = "black", size = .25) +
   geom_path(data=t0.0, aes(coords.x1, coords.x2, group = NA), size = 1, alpha = .5, linetype = '21') +
   geom_path(data = t0.1, aes(coords.x1, coords.x2,group = NA), size = 1, alpha = .5, linetype = '21') +
-  geom_point(data = t0.0, aes(coords.x1, coords.x2,group = NA, fill = seq), size = 2, shape = 21) +
+geom_point(data = t0.0, aes(coords.x1, coords.x2,group = NA, fill = seq), size = 2, shape = 21) +
   geom_point(data = t0.1, aes(coords.x1, coords.x2,group = NA, fill = seq), size = 2, shape = 21) +
-  geom_path(data = t1.0, aes(x, y,group = NA), size = 1) +
+ geom_path(data = t1.0, aes(x, y,group = NA), size = 1) +
   geom_point(data = t1.0, aes(x, y,group = NA, fill = seq), size = 2, shape = 21) +
   geom_point(data = t0.0[t0.0$seq %in% c(50,59,64,81),], aes(coords.x1, coords.x2,group = NA, fill = seq), size = 4, shape = 21) +
   geom_point(data = t0.1[t0.1$seq %in% c(50,59,64,81),], aes(coords.x1, coords.x2,group = NA, fill = seq), size = 4, shape = 21) +
-  geom_point(data = t1.0[t1.0$seq %in% c(50,59,64,81),], aes(x, y,group = NA, fill = seq), size = 4, shape = 21,) +
+geom_point(data = t1.0[t1.0$seq %in% c(50,59,64,81),], aes(x, y,group = NA, fill = seq), size = 4, shape = 21,) +
   scale_fill_viridis_c(option = "C") + theme(legend.position = "none", axis.title = element_blank(), panel.background = element_rect(fill = "gray93"),
                                              panel.grid.major = element_line(colour= "white")) +
   coord_fixed(xlim = c(-11, -1), 
@@ -1949,9 +2019,9 @@ SFc <- ggplot(map.world, aes(long, lat, group = group)) +
   geom_polygon(fill = "white", col = "black", size = .25) +
   geom_path(data=t0.0, aes(coords.x1, coords.x2, group = NA), size = 1, alpha = .5, linetype = '21') +
   geom_path(data = t0.1, aes(coords.x1, coords.x2,group = NA), size = 1, alpha = .5, linetype = '21') +
-  geom_point(data = t0.0, aes(coords.x1, coords.x2,group = NA, fill = seq), size = 2, shape = 21) +
+ geom_point(data = t0.0, aes(coords.x1, coords.x2,group = NA, fill = seq), size = 2, shape = 21) +
   geom_point(data = t0.1, aes(coords.x1, coords.x2,group = NA, fill = seq), size = 2, shape = 21) +
-  geom_path(data = t1.0, aes(x, y,group = NA), size = 1, alpha = .25) +
+ geom_path(data = t1.0, aes(x, y,group = NA), size = 1, alpha = .25) +
   geom_point(data = t1.0, aes(x, y,group = NA, fill = seq), size = 2, shape = 21, alpha = .25) +
   geom_path(data = t1.1, aes(x, y,group = NA), size = 1) +
   geom_point(data = new.pts, aes(x, y,group = NA), fill = '#20A387FF', size = 2, shape = 21) +
@@ -2030,7 +2100,7 @@ repeat{
     tmean1 <- rbind(tmean1, tmean[i,])
   }
   tmean <- tmean1
-  
+
 }
 
 tmean <-  SpatialLines(list(Lines(list(Line(cbind(tmean$x, tmean$y))), "id")))
@@ -2096,7 +2166,7 @@ SFd<-  ggplot(map.world, aes(long, lat, group = group)) +
   geom_path(data = t0.1, aes(coords.x1, coords.x2,group = NA), size = 1, alpha = .5, linetype = '21') +
   geom_point(data = t0.0, aes(coords.x1, coords.x2,group = NA), size = 2, shape = 21, fill = "black") +
   geom_point(data = t0.1, aes(coords.x1, coords.x2,group = NA), size = 2, shape = 21, fill = "black") +
-  
+
   geom_point(data = nn.ex2, aes(x,y,group = NA, fill = wvar), size = 4, shape = 21) +
   geom_path(data = tmean, aes(mn.lon, mn.lat, group = NA), size = 1) +
   geom_point(data = tmean, aes(mn.lon, mn.lat, group = NA, fill = within.var), size = 2, shape = 21) +
@@ -2106,6 +2176,6 @@ SFd<-  ggplot(map.world, aes(long, lat, group = group)) +
   coord_fixed(xlim = c(-11, -1), 
               ylim = c(37, 44),ratio = 1.2)   
 
-png("FigS2.png",  width = 20, height = 16, units = "cm", res = 400)
+png("FigS3.png",  width = 20, height = 16, units = "cm", res = 400)
 cowplot::plot_grid(SFa,SFb,SFc,SFd, nrow = 2)
 dev.off()
