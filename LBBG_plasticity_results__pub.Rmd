@@ -989,8 +989,9 @@ p.hwd <- ggplot(idvar.wd, aes(r))+ geom_histogram(col = "gray75") +
                       axis.title.x=element_text(size=9), legend.position = "none", panel.grid=element_blank()) 
 
 
- pdf("Figure_S5.pdf",  width =3.94, height = 6.3)
-# png("FigS5.png",  width = 10, height = 16, units = "cm", res = 400)
+#  pdf("Figure_S5.pdf",  width =3.94, height = 6.3)
+# # png("FigS5.png",  width = 10, height = 16, units = "cm", res = 400)
+tiff("Figs5.tiff",  width = 10, height = 16, units = "cm", res = 300)
 plot_grid(p.hol, p.hsf, p.htf, p.hts, p.hcd, p.hwa, p.hwd, p.hca, nrow = 4)
  dev.off()
 
@@ -1014,13 +1015,14 @@ filter(idvar.ca, r <= quantile(idvar.ca$r, .05)) %>% select(id,r) %>% arrange(r)
 
 ###5555 overlaps in broad wintering region, but not in fine-scale
 
-varid <- c((filter(ol.df, mn_overlap <= quantile(ol.df$mn_overlap, .05)) %>% select(id,mn_overlap) %>% arrange(mn_overlap))$id,
-(filter(wtraj.f, wvar >= quantile(wtraj.f$wvar, .95)) %>% select(id, wvar) %>% arrange(wvar))$id,
-(filter(wtraj.s, wvar >= quantile(wtraj.s$wvar, .95)) %>% select(id, wvar) %>% arrange(wvar))$id,
-(filter(idvar.cd, r <= quantile(idvar.cd$r, .05)) %>% select(id,r) %>% arrange(r))$id,
-(filter(idvar.wa, r <= quantile(idvar.wa$r, .05)) %>% select(id,r) %>% arrange(r))$id,
-(filter(idvar.wd, r <= quantile(idvar.wd$r, .05)) %>% select(id,r) %>% arrange(r))$id,
-(filter(idvar.ca, r <= quantile(idvar.ca$r, .05)) %>% select(id,r) %>% arrange(r))$id)
+varid <- c(as.character((filter(ol.df, mn_overlap <= quantile(ol.df$mn_overlap, .05)) %>% select(id,mn_overlap) %>% arrange(mn_overlap))$id),
+as.character((filter(sf.df, sf_mn_overlap <= quantile(sf.df$sf_mn_overlap, .05)) %>% select(id,sf_mn_overlap) %>% arrange(sf_mn_overlap))$id),
+as.character((filter(wtraj.f, wvar >= quantile(wtraj.f$wvar, .95)) %>% select(id, wvar) %>% arrange(wvar))$id),
+as.character((filter(wtraj.s, wvar >= quantile(wtraj.s$wvar, .95)) %>% select(id, wvar) %>% arrange(wvar))$id),
+as.character((filter(idvar.cd, r <= quantile(idvar.cd$r, .05)) %>% select(id,r) %>% arrange(r))$id),
+as.character((filter(idvar.wa, r <= quantile(idvar.wa$r, .05)) %>% select(id,r) %>% arrange(r))$id),
+as.character((filter(idvar.wd, r <= quantile(idvar.wd$r, .05)) %>% select(id,r) %>% arrange(r))$id),
+as.character((filter(idvar.ca, r <= quantile(idvar.ca$r, .05)) %>% select(id,r) %>% arrange(r))$id))
 
 ##note: 5 individuals who moved wintering area are not included in route traj. 
 length(unique(varid))
@@ -1036,11 +1038,12 @@ p.direction <- ggplot(ol.df, aes(med.mig, resid.var)) + geom_blank() +
 p.olr <- ggplot(ol.df, aes(med.mig, resid.var)) + geom_point(size = 1) + geom_smooth(method = "lm",se=F, size = 1, col = "black") + xlab("Median migration distance (km)")  + ylab("Residual Distribution Overlap") + scale_x_continuous(expand = c(0, 0)) + ggtitle('a') +
   theme_bw() +  theme( axis.text =element_text(size=9),axis.title.y=element_text(size=9), legend.position = "none", panel.grid=element_blank(), plot.title=element_text(hjust=0), plot.background = element_blank(), plot.margin = margin(3, 3, 3, 3)) ##with 95% confidence interval
 
-p.str <- ggplot(traj.s.w, aes(med.mig, resid.var)) + geom_point(size = 1) + ggtitle('c') +
+p.str <- ggplot(traj.s.w, aes(med.mig, resid.var)) + geom_point(size = 1) + 
+  geom_smooth(method = "lm",se=F, size = 1, col = "black") + ggtitle('c') +
   ylab("Residual spring route variation (km)") + xlab("Median migration distance (km)")  + theme_bw() + scale_x_continuous(expand = c(0, 0)) +
   theme(axis.text =element_text(size=9), legend.position = "none", axis.title.y=element_text(size=9),panel.grid=element_blank(), plot.title=element_text(hjust=0), plot.background = element_blank(), plot.margin = margin(3, 3, 3, 3)) + ylim(125, -125)
 
-p.ftr<- ggplot(traj.f.w,  aes(med.mig, resid.var)) + geom_point(size = 1) + ggtitle('b') +
+p.ftr<- ggplot(traj.f.w,  aes(med.mig, resid.var)) + geom_point(size = 1)  + ggtitle('b') +
   ylab("Residual autumn route variation (km)") + xlab("Median migration distance (km)")  + theme_bw() + scale_x_continuous(expand = c(0, 0)) +
   theme(axis.text =element_text(size=9), legend.position = "none", axis.title.y=element_text(size=9), plot.background = element_blank(), panel.grid=element_blank(), plot.title=element_text(hjust=0), plot.margin = margin(3, 3, 3, 3)) + ylim(125, -125)
 
