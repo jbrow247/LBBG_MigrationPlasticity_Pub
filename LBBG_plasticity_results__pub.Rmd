@@ -62,6 +62,8 @@ gull %>% ggplot(aes(yday(winter.depart))) + geom_histogram()
 gull$winter.depart <- yday(gull$winter.depart)
 
 gull <- gull %>% group_by(id) %>% mutate(mn.mig = mean(mig.dist), med.mig = median(mig.dist), n.yrs = length(mig.dist)) %>% arrange(med.mig) %>% ungroup()
+gull$med.mig <- ifelse(gull$change.wa == T, NA, gull$med.mig)
+gull$mn.mig <- ifelse(gull$change.wa == T, NA, gull$mn.mig)
 gull$id <- factor(gull$id)
 
 ##remove gull dates occuring in a gap. lns 563-572 in LBBG_plasticity_pub.R
@@ -97,9 +99,11 @@ idvar.md$r <- btwnvar/(btwnvar+idvar.md$idvar)
 ```
 
 ```{r wa site fidelity}
-sf.ol<-gull %>% filter(change.wa == F) %>% group_by(id) %>% select(id, med.mig, sf_mn_overlap) %>% distinct()
-sf.lm <- lm(sf_mn_overlap ~ med.mig, data = sf.ol)
-sf.lm.0 <- lm(sf_mn_overlap ~ 1, data = sf.ol)
+sf.ol<-gull %>%
+  group_by(id) %>% select(id, med.mig, sf_mn_overlap) %>% distinct()
+data <- filter(sf.ol, !is.na(med.mig))
+sf.lm <- lm(sf_mn_overlap ~ med.mig, data = data)
+sf.lm.0 <- lm(sf_mn_overlap ~ 1, data = data)
 lrt.sf <- anova(sf.lm.0, sf.lm)
 
 median(sf.ol$sf_mn_overlap)
@@ -112,7 +116,7 @@ median(sf.ol$sf_mn_overlap)
 wa.ol <- gull %>% group_by(id) %>% mutate(max.n.wa = max(n.winter.p)) %>% select(id, med.mig, mn_overlap, max_overlap, max.n.wa) %>% distinct()
 
 ##remove wa change for lm with mig dist
-lm.data <-  gull %>% filter(change.wa == F) %>% group_by(id) %>% mutate(max.n.wa = max(n.winter.p)) %>% select(id, med.mig, mn_overlap, max_overlap, max.n.wa) %>% distinct()
+lm.data <-  filter(wa.ol, !is.na(med.mig))
 wa.ol.lm <- lm(mn_overlap ~ med.mig, data = lm.data)
 wa.ol.lm.0 <- lm(mn_overlap ~ 1, data = lm.data)
 lrt.ol <- anova(wa.ol.lm.0, wa.ol.lm)
@@ -388,7 +392,7 @@ ol.btwn.b <- coef(ol.btwn.lm)[1]
 ol.btwn.m <- coef(ol.btwn.lm)[2]
 
 ###id w changing wa areas removed
-ol.df <- gull %>% filter(change.wa == F) %>% select(id, mn_overlap, mig.dist) %>% group_by(id) %>% summarise(mn_overlap = unique(mn_overlap), med.mig = median(mig.dist))
+ol.df <- gull %>% mutate(mig.dist = ifelse(change.wa == T, NA, mig.dist)) %>% select(id, mn_overlap, mig.dist) %>% group_by(id) %>% summarise(mn_overlap = unique(mn_overlap), med.mig = median(mig.dist)) %>% ungroup() 
 ol.df$null <- ol.btwn.m*ol.df$med.mig + ol.btwn.b  
 ol.df$resid.var <- ol.df$mn_overlap - ol.df$null
 
@@ -413,16 +417,17 @@ plot(lmm.cd)
 range.cd <- filter(gull, !is.na(col.depart)) %>% group_by(id) %>% summarise(range = max(col.depart) - min(col.depart)) ## range in individual departure dates
 
 ##Individual repeatability in colony departure
-lmm.cd.nowa <- lmer(col.depart ~ mig.dist + (1|col) + (1 | id), data = filter(gull, !is.na(col.depart) & change.wa == F) %>% mutate(mig.dist = mig.dist/1000)) ##remove wa changers
-idres.cd <- data.frame(id = filter(gull, !is.na(col.depart)& change.wa == F)$id, resid = resid(lmm.cd.nowa))
+# lmm.cd.nowa <- lmer(col.depart ~ mig.dist + (1|col) + (1 | id), data = filter(gull, !is.na(col.depart) & change.wa == F) %>% mutate(mig.dist = mig.dist/1000)) ##remove wa changers
+idres.cd <- data.frame(id = filter(gull, !is.na(col.depart))$id, resid = resid(lmm.cd))
 idvar.cd <- idres.cd %>% group_by(id) %>% summarise(idvar = mean(resid^2)) ##calculate indivdiuals residual variance
-idvar.cd <- filter(gull, !is.na(col.depart)& change.wa == F)%>% select(id, med.mig) %>% distinct() %>% full_join(idvar.cd)
-btwnvar <- VarCorr(lmm.cd.nowa)[[1]][1]
+idvar.cd <- filter(gull, !is.na(col.depart))%>% select(id, med.mig) %>% distinct() %>% full_join(idvar.cd)
+btwnvar <- VarCorr(lmm.cd)[[1]][1]
 idvar.cd$r <- btwnvar/(btwnvar+idvar.cd$idvar)
-idvar.cd <- filter(gull, !is.na(col.depart)& change.wa == F) %>% group_by(id) %>% summarise(range = max(col.depart) - min(col.depart)) %>% right_join(idvar.cd)
+# idvar.cd <- filter(gull, !is.na(col.depart)) %>% group_by(id) %>% summarise(range = max(col.depart) - min(col.depart)) %>% right_join(idvar.cd)
 ##linear model of indivdiual repeatability against migration distance
-lm.cd <- lm(r~med.mig, data = idvar.cd)
-lm.cd.n <- lm(r~1, data = idvar.cd)
+data <- filter(idvar.cd, !is.na(med.mig))
+lm.cd <- lm(r~med.mig, data = data)
+lm.cd.n <- lm(r~1, data = data)
 lrt.cd <- anova(lm.cd.n, lm.cd) ## null
 ```
 
@@ -437,16 +442,16 @@ plot(lmm.wa)
 
 ##individual repeatability
 #remove ids who change winter area
-lmm.wa.nowa <- lmer(winter.arrive ~ mig.dist + (1|col) +  (1 | id), data = filter(gull, !is.na(winter.arrive)& change.wa == F)%>% mutate(mig.dist = mig.dist/1000))
-idres.wa <- data.frame(id = filter(gull, !is.na(winter.arrive) & change.wa == F)$id, resid = resid(lmm.wa.nowa ))
+idres.wa <- data.frame(id = filter(gull, !is.na(winter.arrive))$id, resid = resid(lmm.wa ))
 idvar.wa <- idres.wa %>% group_by(id) %>% summarise(idvar = mean(resid^2)) ##calculate indivdiuals residual variance
-idvar.wa <- filter(gull, !is.na(winter.arrive)& change.wa == F) %>% select(id, med.mig) %>% distinct() %>% full_join(idvar.wa)
-btwnvar <- VarCorr(lmm.wa.nowa )[[1]][1]
+idvar.wa <- filter(gull, !is.na(winter.arrive)) %>% select(id, med.mig) %>% distinct() %>% full_join(idvar.wa)
+btwnvar <- VarCorr(lmm.wa )[[1]][1]
 idvar.wa$r <- btwnvar/(btwnvar+idvar.wa$idvar)
 
 ##Does individual repeatability increase with migration distance?
-lm.wa <- lm(r~med.mig, data = idvar.wa)
-lm.wa.n <- lm(r~1, data = idvar.wa)
+data <- filter(idvar.wa, !is.na(med.mig))
+lm.wa <- lm(r~med.mig, data = data)
+lm.wa.n <- lm(r~1, data = data)
 lrt.wa <- anova(lm.wa.n, lm.wa) ## null
 
 fall.mig.time <- filter(gull, !is.na(winter.arrive) & !is.na(col.depart))%>% mutate(mig.time.f = winter.arrive - col.depart) %>% summarise(mn = mean(mig.time.f), med = median(mig.time.f), max = max(mig.time.f), min = min(mig.time.f)) ## duration between col departure and winter arrive
@@ -464,16 +469,17 @@ plot(lmm.wd)
 
 ##individual repeatability
 ##remove id who change wa
-lmm.wd.nowa <- lmer(winter.depart ~ mig.dist + (1|col) + (1 | id), data = gull %>% filter(change.wa == F) %>% mutate(mig.dist = mig.dist/1000))
-idres.wd <- data.frame(id = (gull %>% filter(change.wa == F))$id, resid = resid(lmm.wd.nowa))
+# lmm.wd.nowa <- lmer(winter.depart ~ mig.dist + (1|col) + (1 | id), data = gull %>% filter(change.wa == F) %>% mutate(mig.dist = mig.dist/1000))
+idres.wd <- data.frame(id = gull$id, resid = resid(lmm.wd))
 idvar.wd <- idres.wd %>% group_by(id) %>% summarise(idvar = mean(resid^2)) ##calculate indivdiuals residual variance
-idvar.wd <- gull %>% filter(change.wa == F) %>% select(id, med.mig) %>% distinct() %>% full_join(idvar.wd)
-btwnvar <- VarCorr(lmm.wd.nowa)[[1]][1]
+idvar.wd <- gull %>% select(id, med.mig) %>% distinct() %>% full_join(idvar.wd)
+btwnvar <- VarCorr(lmm.wd)[[1]][1]
 idvar.wd$r <- btwnvar/(btwnvar+idvar.wd$idvar)
 
 ## Does individual repeatability change with migration distance?
-lm.wd <- lm(r~med.mig, data = idvar.wd)
-lm.wd.n <- lm(r~1, data = idvar.wd)
+data <- filter(idvar.wd, !is.na(med.mig))
+lm.wd <- lm(r~med.mig, data =data)
+lm.wd.n <- lm(r~1, data = data)
 lrt.wd <- anova(lm.wd.n, lm.wd) 
 
 ##range in individual departure dates
@@ -489,16 +495,17 @@ plot(lmm.ca)
 
 ##individual repeatability
 #remove id w change wa
-lmm.ca.nowa <- lmer(col.arrival ~ mig.dist + (1|col) + (1 | id), data = gull %>% filter(change.wa == F) %>% mutate(mig.dist = mig.dist/1000))
-idres.ca <- data.frame(id = (gull %>% filter(change.wa == F))$id, resid = resid(lmm.ca.nowa))
+# lmm.ca.nowa <- lmer(col.arrival ~ mig.dist + (1|col) + (1 | id), data = gull %>% filter(change.wa == F) %>% mutate(mig.dist = mig.dist/1000))
+idres.ca <- data.frame(id = gull$id, resid = resid(lmm.ca))
 idvar.ca <- idres.ca %>% group_by(id) %>% summarise(idvar = mean(resid^2)) ##calculate indivdiuals residual variance
-idvar.ca <- gull %>% filter(change.wa == F) %>% select(id, med.mig) %>% distinct() %>% full_join(idvar.ca)
-btwnvar <- VarCorr(lmm.ca.nowa)[[1]][1]
+idvar.ca <- gull %>% select(id, med.mig) %>% distinct() %>% full_join(idvar.ca)
+btwnvar <- VarCorr(lmm.ca)[[1]][1]
 idvar.ca$r <- btwnvar/(btwnvar+idvar.ca$idvar)
 
 ##does individual repeatability change with migration distance?
-lm.ca <- lm(r~med.mig, data = idvar.ca)
-lm.ca.n <- lm(r~1, data = idvar.ca)
+data <- filter(idvar.ca, !is.na(med.mig))
+lm.ca <- lm(r~med.mig, data = data)
+lm.ca.n <- lm(r~1, data = data)
 lrt.ca <- anova(lm.ca.n, lm.ca)
 anova(lm.ca.n, lm.ca)
 
@@ -511,7 +518,7 @@ range.ca <- gull  %>% group_by(id) %>% summarise(range = max(col.arrival) - min(
 ```{r repeatable ids}
 
 ###id w changing wa areas removed
-sf.df <- gull %>% filter(change.wa == F) %>% select(id, sf_mn_overlap, mig.dist) %>% group_by(id) %>% summarise(sf_mn_overlap = unique(sf_mn_overlap), med.mig = median(mig.dist))
+
 plastic.id <- as.character(filter(idvar.ca, r <= quantile(idvar.ca$r, .05))$id)
 plastic.id <- c(as.character(filter(idvar.cd, r <= quantile(idvar.cd$r, .05))$id),plastic.id)
 plastic.id <-c(as.character(filter(idvar.wa, r <= quantile(idvar.wa$r, .05))$id),plastic.id)
@@ -519,7 +526,7 @@ plastic.id <-c(as.character(filter(idvar.wd, r <= quantile(idvar.wd$r, .05))$id)
 plastic.id <-c(as.character(filter(wtraj.s, wvar >= quantile(wtraj.s$wvar, .95))$id),plastic.id)
 plastic.id <-c(as.character(filter(wtraj.f, wvar >= quantile(wtraj.f$wvar, .95))$id),plastic.id)
 plastic.id <-c(as.character(filter(ol.df, mn_overlap <= quantile(ol.df$mn_overlap, .05))$id),plastic.id)
-plastic.id <-c(as.character(filter(sf.df, sf_mn_overlap <= quantile(sf.ol$sf_mn_overlap, .05))$id),plastic.id)
+plastic.id <-c(as.character(filter(sf.ol, sf_mn_overlap <= quantile(sf.ol$sf_mn_overlap, .05))$id),plastic.id)
 
 table(plastic.id)
 n.variable <- length(unique(plastic.id))
@@ -631,7 +638,7 @@ ol.df.pair <- rbind(rand.UD_overlap_range %>% select(overlap, med.mig, pair),
 p.ol <- ggplot(ol.df.pair, aes(med.mig, overlap, col = pair)) + geom_point(size = 1) + geom_smooth(method = "lm",se=F, size = 1) + scale_color_manual(values = c("grey75", "black"))  + xlab("Individual median migration distance (km)")  + ylab("Non-breeding distribution Overlap") + scale_x_continuous(expand = c(0, 0)) + ggtitle('a') +
   theme_bw() +  theme(axis.title.x = element_blank(), axis.text =element_text(size=9),axis.title.y=element_text(size=9), legend.position = "none", panel.grid=element_blank(), plot.title=element_text(hjust=0), plot.background = element_blank(), plot.margin = margin(0, 3, -3, 3)) ##with 95% confidence interval
 
-p.sf <- ggplot(sf.df, aes(med.mig, sf_mn_overlap)) + geom_point(size = 1)   +  xlab("Individual median migration distance (km)")  + ylab("Winter area overlap") + scale_x_continuous(expand = c(0, 0)) + ggtitle('b') +
+p.sf <- ggplot(sf.ol, aes(med.mig, sf_mn_overlap)) + geom_point(size = 1)   +  xlab("Individual median migration distance (km)")  + ylab("Winter area overlap") + scale_x_continuous(expand = c(0, 0)) + ggtitle('b') +
   theme_bw() +  theme(axis.title.x = element_blank(), axis.text =element_text(size=9),axis.title.y=element_text(size=9), legend.position = "none", panel.grid=element_blank(), plot.title=element_text(hjust=0), plot.background = element_blank(), plot.margin = margin(0, 3, -3, 3)) ##with 95% confidence interval
 
 p.st <- ggplot(traj.s, aes(med.mig, mn_var, col = pair)) + geom_point(size = 1) + geom_smooth(method = "lm", se=F, size = 1) +
@@ -1002,7 +1009,7 @@ Table S3.  Individuals (device number) in and above the 95th percentile for each
 ```{r Table S4, include = T}
 filter(ol.df, mn_overlap <= quantile(ol.df$mn_overlap, .05)) %>% select(id,mn_overlap) %>% arrange(mn_overlap)
 
-filter(sf.df, sf_mn_overlap <= quantile(sf.df$sf_mn_overlap, .05)) %>% select(id,sf_mn_overlap) %>% arrange(sf_mn_overlap)
+filter(sf.ol, sf_mn_overlap <= quantile(sf.ol$sf_mn_overlap, .05)) %>% select(id,sf_mn_overlap) %>% arrange(sf_mn_overlap)
 #filter(sf.df, sf_mn_overlap <= quantile(sf.df$sf_mn_overlap, .06)) %>% select(id,sf_mn_overlap) %>% arrange(sf_mn_overlap)
 filter(wtraj.f, wvar >= quantile(wtraj.f$wvar, .95)) %>% select(id, wvar) %>% arrange(wvar)
 filter(wtraj.s, wvar >= quantile(wtraj.s$wvar, .95)) %>% select(id, wvar) %>% arrange(wvar)
@@ -1016,7 +1023,7 @@ filter(idvar.ca, r <= quantile(idvar.ca$r, .05)) %>% select(id,r) %>% arrange(r)
 ###5555 overlaps in broad wintering region, but not in fine-scale
 
 varid <- c(as.character((filter(ol.df, mn_overlap <= quantile(ol.df$mn_overlap, .05)) %>% select(id,mn_overlap) %>% arrange(mn_overlap))$id),
-as.character((filter(sf.df, sf_mn_overlap <= quantile(sf.df$sf_mn_overlap, .05)) %>% select(id,sf_mn_overlap) %>% arrange(sf_mn_overlap))$id),
+as.character((filter(sf.ol, sf_mn_overlap <= quantile(sf.ol$sf_mn_overlap, .05)) %>% select(id,sf_mn_overlap) %>% arrange(sf_mn_overlap))$id),
 as.character((filter(wtraj.f, wvar >= quantile(wtraj.f$wvar, .95)) %>% select(id, wvar) %>% arrange(wvar))$id),
 as.character((filter(wtraj.s, wvar >= quantile(wtraj.s$wvar, .95)) %>% select(id, wvar) %>% arrange(wvar))$id),
 as.character((filter(idvar.cd, r <= quantile(idvar.cd$r, .05)) %>% select(id,r) %>% arrange(r))$id),
