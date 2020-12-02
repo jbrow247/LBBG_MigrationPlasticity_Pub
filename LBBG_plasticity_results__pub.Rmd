@@ -1,12 +1,10 @@
 ---
-title: "Results"
+title: "JAE_R3_excWAChange"
 author: "Morgan Brown"
-date: '2020-06-25'
+date: "12/01/2020"
 output:
   word_document: default
-  html_document:
-    df_print: paged
-  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include = F}
@@ -63,7 +61,7 @@ gull$winter.arrive <- if_else(yday(gull$winter.arrive)>100,yday(gull$winter.arri
 gull %>% ggplot(aes(yday(winter.depart))) + geom_histogram()
 gull$winter.depart <- yday(gull$winter.depart)
 
-gull <- gull %>% group_by(id) %>% mutate(med.mig = mean(mig.dist), med.mig = median(mig.dist), n.yrs = length(mig.dist)) %>% arrange(med.mig) %>% ungroup()
+gull <- gull %>% group_by(id) %>% mutate(mn.mig = mean(mig.dist), med.mig = median(mig.dist), n.yrs = length(mig.dist)) %>% arrange(med.mig) %>% ungroup()
 gull$id <- factor(gull$id)
 
 ##remove gull dates occuring in a gap. lns 563-572 in LBBG_plasticity_pub.R
@@ -85,7 +83,7 @@ no.wa.overlap <- unique(no.wa.overlap)
 ```
 
 ```{r mig.dist repeatability}
-r.md <- rptR::rpt(mig.dist ~ (1 | id) + (1 | col), grname = c("id", "col"), data = gull, 
+r.md <- rptR::rpt(mig.dist ~ (1 | id) + (1 | col), grname = c("id"), data = gull, 
             datatype = "Gaussian", nboot = 1000, npermut = 1000)
 
 lmm.md <- lmer(mig.dist ~ (1 | id)+ (1 | col), data = gull)
@@ -99,10 +97,10 @@ idvar.md$r <- btwnvar/(btwnvar+idvar.md$idvar)
 ```
 
 ```{r wa site fidelity}
-sf.ol<-gull %>% group_by(id) %>% select(id, med.mig, sf_mn_overlap) %>% distinct()
+sf.ol<-gull %>% filter(change.wa == F) %>% group_by(id) %>% select(id, med.mig, sf_mn_overlap) %>% distinct()
 sf.lm <- lm(sf_mn_overlap ~ med.mig, data = sf.ol)
 sf.lm.0 <- lm(sf_mn_overlap ~ 1, data = sf.ol)
-lrt.sf <- lmtest::lrtest(sf.lm.0, sf.lm)
+lrt.sf <- anova(sf.lm.0, sf.lm)
 
 median(sf.ol$sf_mn_overlap)
 
@@ -111,10 +109,13 @@ median(sf.ol$sf_mn_overlap)
 ```{r overlap lm & randomization tests}
 
 ###linear model of range overlap with migration distance
-wa.ol<-gull %>% group_by(id) %>% mutate(max.n.wa = max(n.winter.p)) %>% select(id, med.mig, mn_overlap, max_overlap, max.n.wa) %>% distinct()
-wa.ol.lm <- lm(mn_overlap ~ med.mig, data = wa.ol)
-wa.ol.lm.0 <- lm(mn_overlap ~ 1, data = wa.ol)
-lrt.ol <- lmtest::lrtest(wa.ol.lm.0, wa.ol.lm)
+wa.ol <- gull %>% group_by(id) %>% mutate(max.n.wa = max(n.winter.p)) %>% select(id, med.mig, mn_overlap, max_overlap, max.n.wa) %>% distinct()
+
+##remove wa change for lm with mig dist
+lm.data <-  gull %>% filter(change.wa == F) %>% group_by(id) %>% mutate(max.n.wa = max(n.winter.p)) %>% select(id, med.mig, mn_overlap, max_overlap, max.n.wa) %>% distinct()
+wa.ol.lm <- lm(mn_overlap ~ med.mig, data = lm.data)
+wa.ol.lm.0 <- lm(mn_overlap ~ 1, data = lm.data)
+lrt.ol <- anova(wa.ol.lm.0, wa.ol.lm)
 
 #randomization tests
 rand.UD_overlap <- readRDS("rand_overlap.RDS") ## list of overlaps from random pairs
@@ -191,6 +192,7 @@ mdb.ol <- md2 ##actual median between indivdiual overlap
 mn_traj <- readRDS("mn_traj_limitlat.RDS")
 
 ##Does route variation change with  migration distance? Linear model. 
+##no traj for birds who changed wa
 mn_traj$id <- factor(mn_traj$id)
 wtraj <- mn_traj %>% group_by(id, direction) %>% summarise(wvar = mean(within.var)) 
 wtraj <- gull %>% group_by(id) %>% summarise(med.mig = median(mig.dist, na.rm = T)) %>% right_join(wtraj)
@@ -199,14 +201,12 @@ wtraj <- wtraj %>% mutate(v.scale = wvar/med.mig)
 wtraj.s <- filter(wtraj, direction == "Spring")
 lm.w.s<- lm(wvar ~ med.mig, data = wtraj.s)
 null <- lm(wvar ~ 1, data = wtraj.s)
-anova(lm.w.s)
-lrt.w.s <- lmtest::lrtest(null,lm.w.s)
+lrt.w.s <- anova(null,lm.w.s)
 
 ##Autumn
 wtraj.f <- filter(wtraj, direction != "Spring")
 lm.w.f <- lm(wvar ~ med.mig, data = wtraj.f)
-anova(lm.w.f)
-lrt.w.f <- lmtest::lrtest(lm(wvar ~ 1, data = wtraj.f), lm.w.f)
+lrt.w.f <- anova(lm(wvar ~ 1, data = wtraj.f), lm.w.f)
 
 #########################################
 ## Randomization tests ##
@@ -322,7 +322,7 @@ mdb.ts <- md2 ## median variance between individuals in spring migration routes
 rand_traj_sum$id_birdyear <- paste(rand_traj_sum$id, rand_traj_sum$birdyear, sep = ".")
 rand_traj_sum$p.id_birdyear <- paste(rand_traj_sum$p.id, rand_traj_sum$p.birdyear, sep = ".")
 rand_traj_sum <- gull %>% select(id_birdyear, md1 = mig.dist) %>% right_join(rand_traj_sum)
-rand_traj_sum <- rand_traj_sum %>%  select(p.id_birdyear) %>% left_join(gull, by = c("p.id_birdyear" = "id_birdyear")) %>% select(p.id_birdyear, md2 = mig.dist) %>% left_join(rand_traj_sum)
+rand_traj_sum <-  gull %>% select(p.id_birdyear = id_birdyear, md2 = mig.dist) %>% right_join(rand_traj_sum)
 rand_traj_sum$med.mig <- rowMeans(rand_traj_sum[,c("md1","md2")])
 rand_traj_sum$pair <- "between"
 
@@ -350,7 +350,7 @@ traj.s.w$resid.var <- traj.s.w$mn_var - traj.s.w$null
 ##check for significance
 dtraj.s.lm <- lm(resid.var ~ med.mig, data = traj.s.w)
 dtraj.s.lm.0 <- lm(resid.var ~ 1, data = traj.s.w)
-lrt.dtraj.s <- lmtest::lrtest(dtraj.s.lm.0, dtraj.s.lm) ## residual overlap does not significantly increase with distance
+lrt.dtraj.s <- anova(dtraj.s.lm.0, dtraj.s.lm) ## residual overlap does not significantly increase with distance
 
 #plot
 ggplot(traj.s.w, aes(med.mig, resid.var)) + geom_point()## variation still slightly more than would be expected in longer migrants
@@ -367,12 +367,10 @@ traj.f.w$resid.var <- traj.f.w$mn_var - traj.f.w$null
 ##check for significance
 dtraj.f.lm <- lm(resid.var ~ med.mig, data = traj.f.w)
 dtraj.f.lm.0 <- lm(resid.var ~ 1, data = traj.f.w)
-lrt.dtraj.f <- lmtest::lrtest(dtraj.f.lm.0, dtraj.f.lm) ## residual overlap does not significantly increase with distance
+lrt.dtraj.f <- anova(dtraj.f.lm.0, dtraj.f.lm) ## residual overlap does not significantly increase with distance
 
 #plot
 ggplot(traj.f.w, aes(med.mig, resid.var)) + geom_point() ## variation still slightly more than would be expected in longer migrants
-
-
 
 ### overlap
 rand.UD_overlap_range <- gull %>% select(id = id_birdyear, md1 = mig.dist) %>% right_join(rand.UD_overlap_range)
@@ -389,16 +387,18 @@ ol.btwn.lm <- lm(overlap ~ med.mig, data = filter(ol, pair == 'between'))
 ol.btwn.b <- coef(ol.btwn.lm)[1]
 ol.btwn.m <- coef(ol.btwn.lm)[2]
 
-wa.ol$null <- ol.btwn.m*wa.ol$med.mig + ol.btwn.b
-wa.ol$resid.var <- wa.ol$mn_overlap - wa.ol$null
+###id w changing wa areas removed
+ol.df <- gull %>% filter(change.wa == F) %>% select(id, mn_overlap, mig.dist) %>% group_by(id) %>% summarise(mn_overlap = unique(mn_overlap), med.mig = median(mig.dist))
+ol.df$null <- ol.btwn.m*ol.df$med.mig + ol.btwn.b  
+ol.df$resid.var <- ol.df$mn_overlap - ol.df$null
 
 ##check for significance
-wa.dol.lm <- lm(resid.var ~ med.mig, data = wa.ol)
-wa.dol.lm.0 <- lm(resid.var ~ 1, data = wa.ol)
-lrt.dol <- lmtest::lrtest(wa.dol.lm.0, wa.dol.lm) ## residual overlap does significantly increase with distance
+wa.dol.lm <- lm(resid.var ~ med.mig, data = ol.df)
+wa.dol.lm.0 <- lm(resid.var ~ 1, data = ol.df)
+lrt.dol <- anova(wa.dol.lm.0, wa.dol.lm) ## residual overlap does significantly increase with distance
 
 ##plot
-ggplot(wa.ol, aes(med.mig, resid.var)) + geom_point()
+ggplot(ol.df, aes(med.mig, resid.var)) + geom_point()
 
 ```
 
@@ -407,28 +407,23 @@ ggplot(wa.ol, aes(med.mig, resid.var)) + geom_point()
 ##population repeatability
 r.cd <- rptR::rpt(col.depart ~ mig.dist + (1|col) + (1 | id), grname = c("id"), data = filter(gull, !is.na(col.depart))%>% mutate(mig.dist = mig.dist/1000), 
             datatype = "Gaussian", nboot = 1000, npermut = 0)
-# r.cd.full <- rptR::rpt(col.depart ~ sex + scale(mig.dist) + (1|col) + (1 | id), grname = c("id"), data = filter(gull, !is.na(col.depart)), 
-#             datatype = "Gaussian", nboot = 1000, npermut = 0)
 
 lmm.cd <- lmer(col.depart ~ mig.dist + (1|col) + (1 | id), data = filter(gull, !is.na(col.depart)) %>% mutate(mig.dist = mig.dist/1000))
 plot(lmm.cd)
-#lmm.cd.full <- lmer(col.depart ~ sex + scale(mig.dist) + (1|col) + (1 | id), data = filter(gull, !is.na(col.depart)))
+range.cd <- filter(gull, !is.na(col.depart)) %>% group_by(id) %>% summarise(range = max(col.depart) - min(col.depart)) ## range in individual departure dates
 
 ##Individual repeatability in colony departure
-idres.cd <- data.frame(id = filter(gull, !is.na(col.depart))$id, resid = resid(lmm.cd))
+lmm.cd.nowa <- lmer(col.depart ~ mig.dist + (1|col) + (1 | id), data = filter(gull, !is.na(col.depart) & change.wa == F) %>% mutate(mig.dist = mig.dist/1000)) ##remove wa changers
+idres.cd <- data.frame(id = filter(gull, !is.na(col.depart)& change.wa == F)$id, resid = resid(lmm.cd.nowa))
 idvar.cd <- idres.cd %>% group_by(id) %>% summarise(idvar = mean(resid^2)) ##calculate indivdiuals residual variance
-idvar.cd <- filter(gull, !is.na(col.depart))%>% select(id, med.mig) %>% distinct() %>% full_join(idvar.cd)
-btwnvar <- VarCorr(lmm.cd)[[1]][1]
+idvar.cd <- filter(gull, !is.na(col.depart)& change.wa == F)%>% select(id, med.mig) %>% distinct() %>% full_join(idvar.cd)
+btwnvar <- VarCorr(lmm.cd.nowa)[[1]][1]
 idvar.cd$r <- btwnvar/(btwnvar+idvar.cd$idvar)
-
-idvar.cd <- filter(gull, !is.na(col.depart)) %>% group_by(id) %>% summarise(range = max(col.depart) - min(col.depart)) %>% right_join(idvar.cd)
-
+idvar.cd <- filter(gull, !is.na(col.depart)& change.wa == F) %>% group_by(id) %>% summarise(range = max(col.depart) - min(col.depart)) %>% right_join(idvar.cd)
 ##linear model of indivdiual repeatability against migration distance
 lm.cd <- lm(r~med.mig, data = idvar.cd)
 lm.cd.n <- lm(r~1, data = idvar.cd)
-lrt.cd <- lmtest::lrtest(lm.cd.n, lm.cd) ## null
-
-range.cd <- filter(gull, !is.na(col.depart)) %>% group_by(id) %>% summarise(range = max(col.depart) - min(col.depart)) ## range in individual departure dates
+lrt.cd <- anova(lm.cd.n, lm.cd) ## null
 ```
 
 ```{r Winter arrival lmm}
@@ -439,20 +434,22 @@ r.wa <- rptR::rpt(winter.arrive ~mig.dist + (1|col) + (1 | id) , grname = c("id"
 
 lmm.wa <- lmer(winter.arrive ~ mig.dist + (1|col) +  (1 | id), data = filter(gull, !is.na(winter.arrive))%>% mutate(mig.dist = mig.dist/1000))
 plot(lmm.wa)
-# lmm.wa.full <- lmer(winter.arrive ~ sex + scale(mig.dist) + (1|col) + (1 | id), data = filter(gull, !is.na(winter.arrive)))
+
 ##individual repeatability
-idres.wa <- data.frame(id = filter(gull, !is.na(winter.arrive))$id, resid = resid(lmm.wa))
+#remove ids who change winter area
+lmm.wa.nowa <- lmer(winter.arrive ~ mig.dist + (1|col) +  (1 | id), data = filter(gull, !is.na(winter.arrive)& change.wa == F)%>% mutate(mig.dist = mig.dist/1000))
+idres.wa <- data.frame(id = filter(gull, !is.na(winter.arrive) & change.wa == F)$id, resid = resid(lmm.wa.nowa ))
 idvar.wa <- idres.wa %>% group_by(id) %>% summarise(idvar = mean(resid^2)) ##calculate indivdiuals residual variance
-idvar.wa <- filter(gull, !is.na(winter.arrive)) %>% select(id, med.mig) %>% distinct() %>% full_join(idvar.wa)
-btwnvar <- VarCorr(lmm.wa)[[1]][1]
+idvar.wa <- filter(gull, !is.na(winter.arrive)& change.wa == F) %>% select(id, med.mig) %>% distinct() %>% full_join(idvar.wa)
+btwnvar <- VarCorr(lmm.wa.nowa )[[1]][1]
 idvar.wa$r <- btwnvar/(btwnvar+idvar.wa$idvar)
 
 ##Does individual repeatability increase with migration distance?
 lm.wa <- lm(r~med.mig, data = idvar.wa)
 lm.wa.n <- lm(r~1, data = idvar.wa)
-lrt.wa <- lmtest::lrtest(lm.wa.n, lm.wa) ## null
+lrt.wa <- anova(lm.wa.n, lm.wa) ## null
 
-fall.mig.time <- filter(gull, !is.na(winter.arrive))%>% mutate(mig.time.f = winter.arrive - col.depart) %>% summarise(mn = mean(mig.time.f), med = median(mig.time.f), max = max(mig.time.f), min = min(mig.time.f)) ## duration between col departure and winter arrive
+fall.mig.time <- filter(gull, !is.na(winter.arrive) & !is.na(col.depart))%>% mutate(mig.time.f = winter.arrive - col.depart) %>% summarise(mn = mean(mig.time.f), med = median(mig.time.f), max = max(mig.time.f), min = min(mig.time.f)) ## duration between col departure and winter arrive
 
 range.wa <- filter(gull, !is.na(winter.arrive)) %>% group_by(id) %>% summarise(range = max(winter.arrive) - min(winter.arrive)) ## range in indivdiual arrival dates
 ```
@@ -460,61 +457,61 @@ range.wa <- filter(gull, !is.na(winter.arrive)) %>% group_by(id) %>% summarise(r
 ```{r Winter departure}
 r.wd <- rptR::rpt(winter.depart ~ mig.dist + (1|col) + (1 | id), grname = c("id"), data = gull %>% mutate(mig.dist = mig.dist/1000), 
             datatype = "Gaussian", nboot = 1000, npermut = 0)##population repeatability
-# r.wd.full <- rptR::rpt(winter.depart ~ sex + mig.dist + (1|col) + (1 | id), grname = c("id"), data = gull, 
-#             datatype = "Gaussian", nboot = 1000, npermut = 0)
-##individual repeatability
-lmm.wd <- lmer(winter.depart ~ mig.dist + (1|col) + (1 | id), data = gull%>% mutate(mig.dist = mig.dist/1000))
-plot(lmm.wd)
-# lmm.wd.full <- lmer(winter.depart ~ sex + scale(mig.dist) + (1|col) + (1 | id), data = gull)
 
-idres.wd <- data.frame(id = gull$id, resid = resid(lmm.wd))
+
+lmm.wd <- lmer(winter.depart ~ mig.dist + (1|col) + (1 | id), data = gull %>%  mutate(mig.dist = mig.dist/1000))
+plot(lmm.wd)
+
+##individual repeatability
+##remove id who change wa
+lmm.wd.nowa <- lmer(winter.depart ~ mig.dist + (1|col) + (1 | id), data = gull %>% filter(change.wa == F) %>% mutate(mig.dist = mig.dist/1000))
+idres.wd <- data.frame(id = (gull %>% filter(change.wa == F))$id, resid = resid(lmm.wd.nowa))
 idvar.wd <- idres.wd %>% group_by(id) %>% summarise(idvar = mean(resid^2)) ##calculate indivdiuals residual variance
-idvar.wd <- gull %>% select(id, med.mig) %>% distinct() %>% full_join(idvar.wd)
-btwnvar <- VarCorr(lmm.wd)[[1]][1]
+idvar.wd <- gull %>% filter(change.wa == F) %>% select(id, med.mig) %>% distinct() %>% full_join(idvar.wd)
+btwnvar <- VarCorr(lmm.wd.nowa)[[1]][1]
 idvar.wd$r <- btwnvar/(btwnvar+idvar.wd$idvar)
 
 ## Does individual repeatability change with migration distance?
 lm.wd <- lm(r~med.mig, data = idvar.wd)
 lm.wd.n <- lm(r~1, data = idvar.wd)
-lrt.wd <- lmtest::lrtest(lm.wd.n, lm.wd) 
+lrt.wd <- anova(lm.wd.n, lm.wd) 
 
 ##range in individual departure dates
-range.wd <- gull %>% group_by(id) %>% summarise(range = max(winter.depart) - min(winter.depart)) 
+range.wd <- gull  %>% group_by(id) %>% summarise(range = max(winter.depart) - min(winter.depart)) 
 ```
 
 ```{r colony arrival lmm}
 ##population repeatability
 r.ca <- rptR::rpt(col.arrival ~ mig.dist + (1|col) + (1 | id), grname = c("id"), data = gull %>% mutate(mig.dist = mig.dist/1000), 
             datatype = "Gaussian", nboot = 1000, npermut = 0)
-
-# r.ca.full <- rptR::rpt(col.arrival ~ sex + mig.dist + (1|col) + (1 | id), grname = c("id"), data = gull, 
-#             datatype = "Gaussian", nboot = 1000, npermut = 0)
-
 lmm.ca <- lmer(col.arrival ~ mig.dist + (1|col) + (1 | id), data = gull %>% mutate(mig.dist = mig.dist/1000))
 plot(lmm.ca)
-# lmm.ca.full <- lmer(col.arrival ~ sex + scale(mig.dist) + (1|col) + (1 | id), data = gull)
 
 ##individual repeatability
-idres.ca <- data.frame(id = gull$id, resid = resid(lmm.ca))
+#remove id w change wa
+lmm.ca.nowa <- lmer(col.arrival ~ mig.dist + (1|col) + (1 | id), data = gull %>% filter(change.wa == F) %>% mutate(mig.dist = mig.dist/1000))
+idres.ca <- data.frame(id = (gull %>% filter(change.wa == F))$id, resid = resid(lmm.ca.nowa))
 idvar.ca <- idres.ca %>% group_by(id) %>% summarise(idvar = mean(resid^2)) ##calculate indivdiuals residual variance
-idvar.ca <- gull %>% select(id, med.mig) %>% distinct() %>% full_join(idvar.ca)
-btwnvar <- VarCorr(lmm.ca)[[1]][1]
+idvar.ca <- gull %>% filter(change.wa == F) %>% select(id, med.mig) %>% distinct() %>% full_join(idvar.ca)
+btwnvar <- VarCorr(lmm.ca.nowa)[[1]][1]
 idvar.ca$r <- btwnvar/(btwnvar+idvar.ca$idvar)
 
 ##does individual repeatability change with migration distance?
 lm.ca <- lm(r~med.mig, data = idvar.ca)
 lm.ca.n <- lm(r~1, data = idvar.ca)
-lrt.ca <- lmtest::lrtest(lm.ca.n, lm.ca)
+lrt.ca <- anova(lm.ca.n, lm.ca)
+anova(lm.ca.n, lm.ca)
 
-spring.mig.time <- gull %>% mutate(mig.time.s = col.arrival- winter.depart) %>% summarise(mn = mean(mig.time.s), med = median(mig.time.s), max = max(mig.time.s), min = min(mig.time.s)) ## duration of spring migration: from winter departure to colony arrival
+spring.mig.time <- gull  %>% mutate(mig.time.s = col.arrival- winter.depart) %>% summarise(mn = mean(mig.time.s), med = median(mig.time.s), max = max(mig.time.s), min = min(mig.time.s)) ## duration of spring migration: from winter departure to colony arrival
 
-range.ca <- gull %>% group_by(id) %>% summarise(range = max(col.arrival) - min(col.arrival)) ##individual ranges in colony arival date
+range.ca <- gull  %>% group_by(id) %>% summarise(range = max(col.arrival) - min(col.arrival)) ##individual ranges in colony arival date
 
 ```
 
 ```{r repeatable ids}
-ol.df <- gull %>% select(id, mn_overlap) %>% distinct()
-sf.df <- gull %>% select(id, sf_mn_overlap) %>% distinct()
+
+###id w changing wa areas removed
+sf.df <- gull %>% filter(change.wa == F) %>% select(id, sf_mn_overlap, mig.dist) %>% group_by(id) %>% summarise(sf_mn_overlap = unique(sf_mn_overlap), med.mig = median(mig.dist))
 plastic.id <- as.character(filter(idvar.ca, r <= quantile(idvar.ca$r, .05))$id)
 plastic.id <- c(as.character(filter(idvar.cd, r <= quantile(idvar.cd$r, .05))$id),plastic.id)
 plastic.id <-c(as.character(filter(idvar.wa, r <= quantile(idvar.wa$r, .05))$id),plastic.id)
@@ -533,7 +530,7 @@ A total of `r length(gull$id)` non-breeding seasons from `r length(unique(gull$i
 
 # Results
 ## Variation in migratory behaviour of lesser black-backed gulls
-Individuals used between `r min(gull$n.winter.p)` &ndash; `r max(gull$n.winter.p)` core areas during the non-breeding season. For all but five individuals (n = `r length(unique(gull$id)) - length(no.wa.overlap)`, `r round((length(unique(gull$id)) - length(no.wa.overlap))/length(unique(gull$id))*100,0)`%), winter areas overlapped across all years. These five individuals switched wintering areas between France and Western Sahara (n = 1), Mauritania and Portugal (n=1), France and UK (n = 1), and Morocco and UK (n = 2). Migration distance was therefore highly repeatable (R = `r myround(r.md$R$id,2)` [95% confidence interval: `r myround(r.md$CI_emp[1,1],2)` - `r myround(r.md$CI_emp[1,2],2)`]). `r ifelse(length(id.with.stop) == 62, "Sixty-two", "check code")` individuals (`r round(length(id.with.stop)/length(unique(gull$id))*100,0)`%) used a stopover in at least one year, and `r round(as.numeric(stopover.time.f)/sum(as.numeric(stopover.time.f),as.numeric(stopover.time.s))*100,0)`% of total time spent in stopover areas were most commonly used in autumn occurred before arrival to winter area. Use of stopover areas was less consistent than wintering areas: `r length(no.so.overlap$id)` out of `r length(id.with.stop)` individuals that used a stopover (`r round(length(no.so.overlap$id)/length(id.with.stop)*100)`%) had a stopover area that did not overlap among years (compared to `r round(length(no.wa.overlap)/length(unique(gull$id))*100)`% individuals who had non-overlapping wintering areas). 
+Individuals used between `r min(gull$n.winter.p)` &ndash; `r max(gull$n.winter.p)` core areas during the non-breeding season. For all but five individuals (n = `r length(unique(gull$id)) - length(no.wa.overlap)`, `r round((length(unique(gull$id)) - length(no.wa.overlap))/length(unique(gull$id))*100,0)`%), winter areas overlapped across all years. These five individuals switched wintering areas between France and Western Sahara (n = 1), Mauritania and Portugal (n=1), France and UK (n = 1), and Morocco and UK (n = 2). Migration distance was therefore highly repeatable (R = `r myround(r.md$R$id,2)` [95% confidence interval: `r myround(r.md$CI_emp[1],2)` - `r myround(r.md$CI_emp[2],2)`]). `r ifelse(length(id.with.stop) == 62, "Sixty-two", "check code")` individuals (`r round(length(id.with.stop)/length(unique(gull$id))*100,0)`%) used a stopover in at least one year, and `r round(as.numeric(stopover.time.f)/sum(as.numeric(stopover.time.f),as.numeric(stopover.time.s))*100,0)`% of total time spent in stopover areas were most commonly used in autumn occurred before arrival to winter area. Use of stopover areas was less consistent than wintering areas: `r length(no.so.overlap$id)` out of `r length(id.with.stop)` individuals that used a stopover (`r round(length(no.so.overlap$id)/length(id.with.stop)*100)`%) had a stopover area that did not overlap among years (compared to `r round(length(no.wa.overlap)/length(unique(gull$id))*100)`% individuals who had non-overlapping wintering areas). 
 
 
 Despite some variation in stopover area use, overlap in non-breeding distributions was generally high, with a median overlap of `r myround(median(wa.ol$mn_overlap),2)` (range: `r myround(min(wa.ol$mn_overlap),2)` &ndash; `r myround(max(wa.ol$mn_overlap),2)`). Non-breeding distributions were considerably more similar within individuals across years than between individuals (median between-individual overlap = `r myround(mdb.ol, 2)`, range = `r myround(min(rand.ol$overlap[rand.ol$pair == "Between"]), 2)`&ndash;`r myround(max(rand.ol$overlap[rand.ol$pair == "Between"]), 2)`,Fig. 2a and Fig. S3 in supplementary material), with none of the randomized sets producing a difference in median more extreme than the actual data (P `r ifelse(myround(pExtreme.ol, 3)<0.001, "< 0.001", "Check numbers")`). Site-fidelity within wintering areas was lower than non-breeding distribution overlap, with a median overlap of `r myround(median(gull$sf_mn_overlap),2)`, and differed substantially among individuals (range: `r min(gull$sf_mn_overlap)` – `r myround(max(gull$sf_mn_overlap),2)`, Fig. 2b). 
@@ -542,7 +539,7 @@ Despite some variation in stopover area use, overlap in non-breeding distributio
 Individual variation in migration route was generally low in both autumn (range =  `r  round(min(wtraj.f$wvar),0)` &ndash; `r round(max(wtraj.f$wvar),0)` km, median = `r round(mdw.tf,0)` km) and spring (range =  `r round(min(wtraj.s$wvar),0)` &ndash; `r round(max(wtraj.s$wvar),0)` km, median = `r round(mdw.ts,0)` km). Most intra-individual route variation occurred at the Bay of Biscay and over the arid centre of Spain (Fig. 1). Intra-individual variation was significantly lower than variation found between paired individuals (autumn: between individual median = `r round(mdb.tf,0)` km, range = `r round(min(rand.t.f$mn_var[rand.t.f$pair == "Between"]),0)` &ndash; `r round(max(rand.t.f$mn_var[rand.t.f$pair == "Between"]),0)`; spring: between individual median = `r round(mdb.ts,0)` km, range = `r round(min(rand.t.s$mn_var[rand.t.f$pair == "Between"]),0)` &ndash; `r round(max(rand.t.s$mn_var[rand.t.f$pair == "Between"]),0)`; Fig. 2c-d and Fig. S3 in supplementary material) with probabilities less than 0.001 of obtaining a difference in medians as extreme from a randomized set. Examples of high and low non-breeding distribution overlap and route variation for a range of migration distances can be found in the supplementary material (Fig. S1 and S4).
 
 
-Individuals departed their breeding colonies within a `r max(gull$col.depart, na.rm = T) - min(gull$col.depart, na.rm = T)`-day period between `r jultodate(min(gull$col.depart, na.rm = T))` &ndash; `r jultodate(max(gull$col.depart, na.rm = T))` (Fig. 3a). The median range of departure dates within an individual was `r median(range.cd$range)` days (range: `r min(range.cd$range)` &ndash;  `r max(range.cd$range)`) and was highly repeatable (`r myround(r.cd$R,2)` [`r myround(r.cd$CI_emp[1],2)` - `r myround(r.cd$CI_emp[2],2)`]). Arrival to wintering area occurred between `r jultodate(min(gull$winter.arrive, na.rm = T))` &ndash;  `r jultodate(max(gull$winter.arrive, na.rm = T))` (a period of `r max(gull$winter.arrive, na.rm = T) - min(gull$winter.arrive, na.rm = T)` days; Fig. 3b). Intra-individual arrival dates to wintering area ranged across years by `r min(range.wa$range)` &ndash;  `r max(range.wa$range)` days (median = `r median(range.wa$range)`) and repeatability was high (R = (`r myround(r.wa$R$id,2)` [`r myround(r.wa$CI_emp[1,1],2)`  - `r myround(r.wa$CI_emp[1,2],2)`]). During spring, the range of departure dates from wintering areas and arrival dates to colony within individuals was narrower than in autumn. Departure dates from wintering areas occurred within a `r max(gull$winter.depart) - min(gull$winter.depart)`-day period between `r jultodate(min(gull$winter.depart))` - `r jultodate(max(gull$winter.depart))` (Fig. 3c). The median intra-individual range of departure dates was `r median(range.wd$range)` days (range: `r min(range.wd$range)` &ndash;  `r max(range.wd$range)`). Repeatability of departure from wintering area was high (R = `r myround(r.wd$R$is,2)` [`r myround(r.wd$CI_emp[1,1],2)` - `r myround(r.wd$CI_emp[1,2],2)`]). Arrival to breeding colonies occurred between `r jultodate(min(gull$col.arrival))` &ndash;  `r jultodate(max(gull$col.arrival))` (a period of `r max(gull$col.arrival) - min(gull$col.arrival)` days; Fig. 3d). Intra-individual range in arrival dates to colony was `r min(range.ca$range)` &ndash;  `r max(range.ca$range)` days (median = `r median(range.ca$range)`). Repeatability was also high (R = `r myround(r.ca$R$id,2)` [`r myround(r.ca$CI_emp[1,1],2)` - `r myround(r.ca$CI_emp[1,2],2)`]). With the exception of departure date from colony, migration dates were later in longer distance migrants (Fig. 3, Table S2 in supplementary material). Colony explained little variance in timing of migration.  Linear mixed model results and partitioning of variance are reported in the supplementary material (Table S2). 
+Individuals departed their breeding colonies within a `r max(gull$col.depart, na.rm = T) - min(gull$col.depart, na.rm = T)`-day period between `r jultodate(min(gull$col.depart, na.rm = T))` &ndash; `r jultodate(max(gull$col.depart, na.rm = T))` (Fig. 3a). The median range of departure dates within an individual was `r median(range.cd$range)` days (range: `r min(range.cd$range)` &ndash;  `r max(range.cd$range)`) and was highly repeatable (`r myround(r.cd$R,2)` [`r myround(r.cd$CI_emp[1],2)` - `r myround(r.cd$CI_emp[2],2)`]). Arrival to wintering area occurred between `r jultodate(min(gull$winter.arrive, na.rm = T))` &ndash;  `r jultodate(max(gull$winter.arrive, na.rm = T))` (a period of `r max(gull$winter.arrive, na.rm = T) - min(gull$winter.arrive, na.rm = T)` days; Fig. 3b). Intra-individual arrival dates to wintering area ranged across years by `r min(range.wa$range)` &ndash;  `r max(range.wa$range)` days (median = `r median(range.wa$range)`) and repeatability was high (R = (`r myround(r.wa$R$id,2)` [`r myround(r.wa$CI_emp[1,1],2)`  - `r myround(r.wa$CI_emp[1,2],2)`]). During spring, the range of departure dates from wintering areas and arrival dates to colony within individuals was narrower than in autumn. Departure dates from wintering areas occurred within a `r max(gull$winter.depart) - min(gull$winter.depart)`-day period between `r jultodate(min(gull$winter.depart))` - `r jultodate(max(gull$winter.depart))` (Fig. 3c). The median intra-individual range of departure dates was `r median(range.wd$range)` days (range: `r min(range.wd$range)` &ndash;  `r max(range.wd$range)`). Repeatability of departure from wintering area was high (R = `r myround(r.wd$R$id,2)` [`r myround(r.wd$CI_emp[1,1],2)` - `r myround(r.wd$CI_emp[1,2],2)`]). Arrival to breeding colonies occurred between `r jultodate(min(gull$col.arrival))` &ndash;  `r jultodate(max(gull$col.arrival))` (a period of `r max(gull$col.arrival) - min(gull$col.arrival)` days; Fig. 3d). Intra-individual range in arrival dates to colony was `r min(range.ca$range)` &ndash;  `r max(range.ca$range)` days (median = `r median(range.ca$range)`). Repeatability was also high (R = `r myround(r.ca$R$id,2)` [`r myround(r.ca$CI_emp[1,1],2)` - `r myround(r.ca$CI_emp[1,2],2)`]). With the exception of departure date from colony, migration dates were later in longer distance migrants (Fig. 3, Table S2 in supplementary material). Colony explained little variance in timing of migration.  Linear mixed model results and partitioning of variance are reported in the supplementary material (Table S2). 
 
 
 While most individuals tended to be highly consistent, for each behaviour a few individuals demonstrated high variation (Fig. 2, Fig. S5 in supplementary material). The individuals demonstrating the most variation were not the same for each behaviour, with `r n.variable` different individuals being in the upper 5th percentile of variation for at least one behaviour (Table S3 in supplementary material).
@@ -550,10 +547,10 @@ While most individuals tended to be highly consistent, for each behaviour a few 
 
 ## Influence of migration distance on individual variation
 
-Migration distances ranged from `r round(min(gull$mig.dist),0)` &ndash; `r round(max(gull$mig.dist),0)` km (median = `r round(median(gull$mig.dist),0)` km). Intra-individual non-breeding distribution overlap decreased with migration distance (overlap = `r myround(wa.ol.lm$coefficients[1],3)` + `r myround(wa.ol.lm$coefficients[2],6)`·migration distance, LRT: X2(`r lrt.ol$Df[2]`) = `r myround(lrt.ol$Chisq [2],3)`, p = `r myround(lrt.ol$"Pr(>Chisq)"[2],3)`; Fig. 2a). However, intra-individual variation increased at a significantly lower rate than the increase between individuals (residual overlap = `r myround(wa.dol.lm$coefficients[1],3)` + `r myround(wa.dol.lm$coefficients[2],3)`·migration distance, LRT: X2(`r lrt.dol$Df[2]`) = `r myround(lrt.dol$Chisq[2],3)`, p = `r myround(lrt.dol$"Pr(>Chisq)"[2],3)`; Fig s6a in supplemental material), suggesting that longer distance migrants were less variable in their behaviour than expected when considering the total space traversed during their movements (and vice-versa for shorter distance migrants). Intra-individual route variation increased significantly with migration distance in spring (variation = `r myround(lm.w.s$coefficients[1],3)` + `r myround(lm.w.s$coefficients[2],3)`·migration distance, LRT: X2(`r lrt.w.s$Df[2]`) = `r myround(lrt.w.s$Chisq[2],3)`, p = `r myround(lrt.w.s$"Pr(>Chisq)"[2],3)`; Fig. 2d), but not in autumn but not autumn (LRT: X2(`r lrt.w.s$Df[2]`) = `r myround(lrt.w.f$Chisq[2],3)`, p = `r myround(lrt.w.f$"Pr(>Chisq)"[2],3)`; Fig. 2c). Changes in route variation with migration distance did not, however, significantly differ from those observed between individuals (autumn LRT: X2(`r lrt.dtraj.f$Df[2]`) = `r myround(lrt.dtraj.f$Chisq[2],3)`, p = `r myround(lrt.dtraj.f$"Pr(>Chisq)"[2],3)`, spring LRT: X2(`r lrt.dtraj.s$Df[2]`) = `r myround(lrt.dtraj.s$Chisq[2],3)`, p = `r myround(lrt.dtraj.s$"Pr(>Chisq)"[2],3)`, Fig S6b-c in supplemental material).
+Migration distances ranged from `r round(min(gull$mig.dist),0)` &ndash; `r round(max(gull$mig.dist),0)` km (median = `r round(median(gull$mig.dist),0)` km). Intra-individual non-breeding distribution overlap decreased with migration distance (overlap = `r myround(wa.ol.lm$coefficients[1],3)` + `r myround(wa.ol.lm$coefficients[2],6)`·migration distance, F(`r lrt.ol$Df[2]`, `r lrt.ol$Res.Df[2]`) = `r myround(lrt.ol$F [2],3)`, p = `r myround(lrt.ol$"Pr(>F)"[2],3)`; Fig. 2a). However, intra-individual variation increased at a significantly lower rate than the increase between individuals (residual overlap = `r myround(wa.dol.lm$coefficients[1],3)` + `r myround(wa.dol.lm$coefficients[2],3)`·migration distance, F(`r lrt.dol$Df[2]`, `r lrt.dol$Res.Df[2]`) = `r myround(lrt.dol$F[2],3)`, p = `r myround(lrt.dol$"Pr(>F)"[2],3)`; Fig s6a in supplemental material), suggesting that longer distance migrants were less variable in their behaviour than expected when considering the total space traversed during their movements (and vice-versa for shorter distance migrants). Intra-individual route variation increased significantly with migration distance in spring (variation = `r myround(lm.w.s$coefficients[1],3)` + `r myround(lm.w.s$coefficients[2],3)`·migration distance, F(`r lrt.w.s$Df[2]`, `r lrt.w.s$Res.Df[2]`) = `r myround(lrt.w.s$F[2],3)`, p = `r myround(lrt.w.s$"Pr(>F)"[2],3)`; Fig. 2d), but not autumn (F(`r lrt.w.f$Df[2]`, `r lrt.w.f$Res.Df[2]`) = `r myround(lrt.w.f$F[2],3)`, p = `r myround(lrt.w.f$"Pr(>F)"[2],3)`; Fig. 2c). Changes in route variation with migration distance did not, however, significantly differ from those observed between individuals (autumn: F(`r lrt.dtraj.f$Df[2]`, `r lrt.dtraj.f$Res.Df[2]`) = `r myround(lrt.dtraj.f$F[2],3)`, p = `r myround(lrt.dtraj.f$"Pr(>F)"[2],3)`, spring: F(`r lrt.dtraj.s$Df[2]`, `r lrt.dtraj.s$Res.Df[2]`) = `r myround(lrt.dtraj.s$F[2],3)`, p = `r myround(lrt.dtraj.s$"Pr(>F)"[2],3)`, Fig S6b-c in supplemental material).
 
 
-Winter site fidelity did not change significantly with migration distance (LRT: X2(`r lrt.sf$Df[2]`) = `r myround(lrt.sf$Chisq[2],3)`, p = `r myround(lrt.sf$"Pr(>Chisq)"[2],3)`, Fig2b). Migration distance also did not correlate with individual repeatability in departure date from colony (LRT: X2(`r lrt.cd$Df[2]`) = `r myround(lrt.cd$Chisq[2],3)`, p = `r myround(lrt.cd$"Pr(>Chisq)"[2],3)`; Fig. 2e), arrival to wintering area (LRT: X2(`r lrt.wa$Df[2]`) = `r myround(lrt.wa$Chisq[2],3)`, p = `r myround(lrt.wa$"Pr(>Chisq)"[2],3)`; Fig. 2f), departure from wintering area (LRT: X2(`r lrt.wd$Df[2]`) = `r myround(lrt.wd$Chisq[2],3)`, p = `r myround(lrt.wd$"Pr(>Chisq)"[2],3)`; Fig. 2g) or arrival to colony (LRT: X2(`r lrt.ca$Df[2]`) = `r myround(lrt.ca$Chisq[2],3)`, p = `r myround(lrt.ca$"Pr(>Chisq)"[2],3)`; Fig. 2h), suggesting individual consistency of migration timing did not increase with migration distance. 
+Winter site fidelity did not change significantly with migration distance (F(`r lrt.sf$Df[2]`, `r lrt.sf$Res.Df[2]`) = `r myround(lrt.sf$F[2],3)`, p = `r myround(lrt.sf$"Pr(>F)"[2],3)`, Fig2b). Migration distance also did not correlate with individual repeatability in departure date from colony (F(`r lrt.cd$Df[2]`, `r lrt.cd$Res.Df[2]`) = `r myround(lrt.cd$F[2],3)`, p = `r myround(lrt.cd$"Pr(>F)"[2],3)`; Fig. 2e), arrival to wintering area (F(`r lrt.wa$Df[2]`, `r lrt.wa$Res.Df[2]`) = `r myround(lrt.wa$F[2],3)`, p = `r myround(lrt.wa$"Pr(>F)"[2],3)`; Fig. 2f), departure from wintering area (F(`r lrt.wd$Df[2]`, `r lrt.wd$Res.Df[2]`) = `r myround(lrt.wd$F[2],3)`, p = `r myround(lrt.wd$"Pr(>F)"[2],3)`; Fig. 2g) or arrival to colony (F(`r lrt.ca$Df[2]`, `r lrt.ca$Res.Df[2]`) = `r myround(lrt.ca$F[2],3)`, p = `r myround(lrt.ca$"Pr(>F)"[2],3)`; Fig. 2h), suggesting individual consistency of migration timing did not increase with migration distance. 
 
 ```{r Table 1, include = T}
 all_traj <- readRDS("all_traj.RDS") 
@@ -623,21 +620,26 @@ Figure 1. Mean individual migration trajectories in autumn and spring based on G
 #r vs migration distance
 wa.ol.lm.b <- lm(overlap ~ med.mig, data = filter(ol, pair == 'between'))
 
-p.direction <- ggplot(wa.ol, aes(med.mig, resid.var)) + geom_blank() + 
+p.direction <- ggplot(ol.df, aes(med.mig, resid.var)) + geom_blank() + 
   annotate("segment", x = 0.4, xend = 0.4, y = 0.26, yend = .10, size=.5, arrow=arrow(angle = 10, type = "closed", length = unit(0.1, "inches"))) + annotate("text", x = c(0,0, -.4), y = c(0.04,.32, .18),  label = c("High", "Low", "Variation"), angle = 90, size = 3) + xlim(-1,1) + theme_void()
 
-p.ol <- ggplot(ol, aes(med.mig, overlap, col = pair)) + geom_point(size = 1) + geom_smooth(method = "lm",se=F, size = 1) + scale_color_manual(values = c("grey75", "black"))  + xlab("Individual median migration distance (km)")  + ylab("Non-breeding distribution Overlap") + scale_x_continuous(expand = c(0, 0)) + ggtitle('a') +
+
+ol.df.pair <- rbind(rand.UD_overlap_range %>% select(overlap, med.mig, pair),
+            ol.df %>% ungroup() %>% select(overlap = mn_overlap, med.mig) %>% mutate(pair = "within"))
+
+
+p.ol <- ggplot(ol.df.pair, aes(med.mig, overlap, col = pair)) + geom_point(size = 1) + geom_smooth(method = "lm",se=F, size = 1) + scale_color_manual(values = c("grey75", "black"))  + xlab("Individual median migration distance (km)")  + ylab("Non-breeding distribution Overlap") + scale_x_continuous(expand = c(0, 0)) + ggtitle('a') +
   theme_bw() +  theme(axis.title.x = element_blank(), axis.text =element_text(size=9),axis.title.y=element_text(size=9), legend.position = "none", panel.grid=element_blank(), plot.title=element_text(hjust=0), plot.background = element_blank(), plot.margin = margin(0, 3, -3, 3)) ##with 95% confidence interval
 
-p.sf <- ggplot(sf.ol, aes(med.mig, sf_mn_overlap)) + geom_point(size = 1)   +  xlab("Individual median migration distance (km)")  + ylab("Winter area overlap") + scale_x_continuous(expand = c(0, 0)) + ggtitle('b') +
+p.sf <- ggplot(sf.df, aes(med.mig, sf_mn_overlap)) + geom_point(size = 1)   +  xlab("Individual median migration distance (km)")  + ylab("Winter area overlap") + scale_x_continuous(expand = c(0, 0)) + ggtitle('b') +
   theme_bw() +  theme(axis.title.x = element_blank(), axis.text =element_text(size=9),axis.title.y=element_text(size=9), legend.position = "none", panel.grid=element_blank(), plot.title=element_text(hjust=0), plot.background = element_blank(), plot.margin = margin(0, 3, -3, 3)) ##with 95% confidence interval
 
 p.st <- ggplot(traj.s, aes(med.mig, mn_var, col = pair)) + geom_point(size = 1) + geom_smooth(method = "lm", se=F, size = 1) +
   scale_color_manual(values = c("grey75", "black"))+ ggtitle('d') +
   ylab("Spring route variation (km)") + theme_bw() + scale_x_continuous(expand = c(0, 0)) +
   theme(axis.title.x = element_blank(),axis.text =element_text(size=9), legend.position = "none", axis.title.y=element_text(size=9),panel.grid=element_blank(), plot.title=element_text(hjust=0), plot.background = element_blank(), plot.margin = margin(-3, 3, -3, 3)) + ylim(310, 0)
-
-p.ft<-ggplot(traj.f, aes(med.mig, mn_var, col = pair)) + geom_point(size = 1) + geom_smooth(data = filter(traj.f, pair == "between"), method = "lm", se=F, size = 1, col = "grey75") +
+ 
+p.ft <-ggplot(traj.f, aes(med.mig, mn_var, col = pair)) + geom_point(size = 1) + geom_smooth(data = filter(traj.f, pair == "between"), method = "lm", se=F, size = 1, col = "grey75") +
   scale_color_manual(values = c("grey75", "black")) + 
     xlab("Individual median migration distance (km)") + ggtitle('c') +
   ylab("Autumn route variation (km)") + theme_bw() + scale_x_continuous(expand = c(0, 0)) +
@@ -650,10 +652,10 @@ p.wa <- ggplot(idvar.wa, aes(med.mig, r)) + geom_point(size = 1) +  ylab(express
   xlab("Individual median migration distance (km)") + theme_bw() +    theme(axis.title.x = element_blank(),axis.text =element_text(size=9),axis.title.y=element_text(size=9),plot.background = element_blank(), panel.grid=element_blank(), plot.title=element_text(hjust=0), plot.margin = margin(-3, 3, -3, 3))
 
 p.wd <- ggplot(idvar.wd, aes(med.mig, r)) + geom_point(size = 1) +  ylab(expression(paste(R[i], "  of winter departures"))) + ylim(0,1) + scale_x_continuous(expand = c(0, 0)) + ggtitle('g') +
-  xlab("Mean migration distance (km)") + theme_bw() +   theme(axis.text =element_text(size=9),axis.title=element_text(size=9), plot.background = element_blank(), panel.grid=element_blank(), plot.title=element_text(hjust=0), plot.margin = margin(-3, 3, 0, 3)) 
+  xlab("Median migration distance (km)") + theme_bw() +   theme(axis.text =element_text(size=9),axis.title=element_text(size=9), plot.background = element_blank(), panel.grid=element_blank(), plot.title=element_text(hjust=0), plot.margin = margin(-3, 3, 0, 3)) 
 
 p.ca <- ggplot(idvar.ca, aes(med.mig, r)) + geom_point(size = 1) +  ylab(expression(paste(R[i], "  of colony arrivals"))) + ylim(0,1) + ggtitle('h') + scale_x_continuous(expand = c(0, 0)) +
-  xlab("Mean migration distance (km)") + theme_bw() +   theme(axis.text =element_text(size=9),axis.title=element_text(size=9), plot.background = element_blank(), panel.grid=element_blank(), plot.title=element_text(hjust=0), plot.margin = margin(-3, 3, 0, 3)) 
+  xlab("Median migration distance (km)") + theme_bw() +   theme(axis.text =element_text(size=9),axis.title=element_text(size=9), plot.background = element_blank(), panel.grid=element_blank(), plot.title=element_text(hjust=0), plot.margin = margin(-3, 3, 0, 3)) 
 
 #pdf("Figure_2.pdf",  width = 6.39, height = 7.87)
 tiff("Fig2.tiff",  width = 16.25, height = 20, units = "cm", res = 300)
@@ -663,19 +665,24 @@ dev.off()
 ```
 Figure 2. a) Mean overlap (Bhattacharyya’s affinity) in non-breeding season distribution, b) autumn and c) spring variation in migration routes, and repeatability in d) colony departure, e) arrival to furthest winter area, f) departure from furthest winter area, and g) colony arrival dates, across multiple non-breeding  seasons of individual lesser black-backed gulls, versus their maximum migration distance. Please note: the y-axis for autumn and spring route variation (b and c) is reversed so that the order of variation is consistent with other plots (from more to less variation). Black line showing trend predicted by the linear models were included if significant. Overlap (a) and route variation (b and c) from between individual pairs are plotted in grey.  
 ```{r Fig. 3, include=T}
-gull.p <- gull  
+##includes ids that changed wa
+gull.p <- gull 
 gull.p$id <- reorder(gull.p$id, gull.p$mig.dist, FUN = median)  
 
 p.r.cd <- ggplot(filter(gull.p, !is.na(col.depart)), aes(x = id, as.Date(col.depart-1, "1970-01-01"))) + 
    geom_tile(aes(id,y=min(as.Date(gull.p$col.depart-1, "1970-01-01"), na.rm=T), height = Inf, width = 1, fill = med.mig, size = 0), 
              data = filter(gull.p, !is.na(col.depart)) %>% group_by(id) %>% summarise(med.mig = median(mig.dist))) +
-  geom_boxplot() + 
+ # geom_boxplot(aes(col = change.wa)) + 
+  geom_boxplot(lwd = .75) + 
+  geom_boxplot(data = filter(gull.p, !is.na(col.depart)) %>% mutate(col.depart = ifelse(change.wa ==T, col.depart, NA)), col = "white", fill = "grey",lwd = .75) + 
   annotate("text", x = 25, y = as.Date(min(gull.p$col.depart, na.rm = T), "1970-01-01"), 
            size = 4.5,label = paste0("R = ", myround(r.cd$R,2), "[", myround(r.cd$CI_emp[1],2), " - ", myround(r.cd$CI_emp[2],2), "]")) + 
   scale_y_date(breaks = as.Date(c(1,32,60,91,121,152,182,213,244,274,305,335,366, 397, 425, 456, 486, 517, 547)-1, "1970-01-01"), 
                date_labels = "%b") +
   ylab("Day of departure from colony") + xlab(expression("Short migration"%<-% "Individual" %->% "Long migration")) + 
-  scale_fill_gradientn(colours=c("#9d869e", "#979ebf","#93c6cf", "#ace089","#fff289"))+ theme_bw() +  
+  scale_fill_gradientn(colours=c("#9d869e", "#979ebf","#93c6cf", "#ace089","#fff289"))+ 
+ # scale_colour_manual(values = c("black","red"))+
+  theme_bw() +  
    theme(axis.text.x=element_blank(), axis.title.x = element_blank(),
          axis.text.y=element_text(size=16),axis.title.y=element_text(size=18),
          panel.grid=element_blank(),legend.position = "none")  
@@ -683,7 +690,8 @@ p.r.cd <- ggplot(filter(gull.p, !is.na(col.depart)), aes(x = id, as.Date(col.dep
 p.r.wa <- ggplot(filter(gull.p, !is.na(winter.arrive)), aes(x =  id, as.Date(winter.arrive-1, "1970-01-01"))) + 
    geom_tile(aes(id,y=min(as.Date(gull.p$winter.arrive-1, "1970-01-01"), na.rm=T), height = Inf, width = 1, fill = med.mig), 
              data = filter(gull.p, !is.na(winter.arrive)) %>% group_by(id) %>% summarise(med.mig = median(mig.dist))) +
-  geom_boxplot() +  
+  geom_boxplot(lwd = .75) +  
+  geom_boxplot(data = filter(gull.p, !is.na(winter.arrive)) %>% mutate(winter.arrive = ifelse(change.wa ==T, winter.arrive, NA)), col = "white", fill = "grey",lwd = .75) + 
   annotate("text", x = 65, y = as.Date(min(gull.p$winter.arrive, na.rm=T), "1970-01-01"), size = 4.5,
            label =paste0("R = ", myround(r.wa$R,2), "[", myround(r.wa$CI_emp[1],2), " - ", myround(r.wa$CI_emp[2],2), "]")) +
   scale_y_date(breaks = as.Date(c(1,32,60,91,121,152,182,213,244,274,305,335,366, 397, 425, 456, 486, 517, 547)-1, "1970-01-01"), date_labels = "%b") +
@@ -693,7 +701,9 @@ p.r.wa <- ggplot(filter(gull.p, !is.na(winter.arrive)), aes(x =  id, as.Date(win
 p.r.wd <- ggplot(filter(gull.p, !is.na(winter.depart)), aes(x = id, as.Date(winter.depart-1, "1970-01-01"))) + 
   geom_tile(aes(id,y=min(as.Date(gull.p$winter.depart-1, "1970-01-01"), na.rm=T), height = Inf, width = 1, fill = med.mig),
              data = filter(gull.p, !is.na(winter.depart)) %>% group_by(id) %>% summarise(med.mig = median(mig.dist))) +
-  geom_boxplot() +  annotate("text", x = 23, y = as.Date(min(gull.p$winter.depart), "1970-01-01"), size = 4.5, 
+  geom_boxplot(lwd = .75) +  
+  geom_boxplot(data = filter(gull.p, !is.na(winter.depart)) %>% mutate(winter.depart = ifelse(change.wa ==T, winter.depart, NA)), col = "white", fill = "grey",lwd = .75) + 
+  annotate("text", x = 23, y = as.Date(min(gull.p$winter.depart), "1970-01-01"), size = 4.5, 
                              label = paste0("R = ", myround(r.wd$R,2), "[", myround(r.wd$CI_emp[1],2), " - ", myround(r.wd$CI_emp[2],2), "]")) + 
   scale_y_date(breaks = as.Date(c(1,32,60,91,121,152,182,213,244,274,305,335,366, 397, 425, 456, 486, 517, 547)-1, "1970-01-01"), date_labels = "%b") +
   ylab("Day of departure from winter area    ") + xlab(expression("Short migration"%<-% "Individual" %->% "Long migration")) +  
@@ -703,7 +713,9 @@ p.r.wd <- ggplot(filter(gull.p, !is.na(winter.depart)), aes(x = id, as.Date(wint
 p.r.ca <- ggplot(filter(gull.p, !is.na(col.arrival)), aes(x = id, as.Date(col.arrival-1, "1970-01-01"))) + 
   geom_tile(aes(id,y=min(as.Date(gull.p$col.arrival-1, "1970-01-01"), na.rm=T), height = Inf, width = 1, fill = med.mig),
              data = filter(gull.p, !is.na(col.arrival)) %>% group_by(id) %>% summarise(med.mig = median(mig.dist))) +
- geom_boxplot() +  annotate("text", x = 65, y = as.Date(min(gull.p$col.arrival), "1970-01-01"), size = 4.5, label = paste0("R = ", myround(r.ca$R,2), "[", myround(r.ca$CI_emp[1],2), " - ", myround(r.ca$CI_emp[2],2), "]")) + 
+ geom_boxplot(lwd = .75) +  
+  geom_boxplot(data = filter(gull.p, !is.na(col.arrival)) %>% mutate(col.arrival = ifelse(change.wa ==T, col.arrival, NA)), col = "white", fill = "grey", lwd = .75) + 
+  annotate("text", x = 65, y = as.Date(min(gull.p$col.arrival), "1970-01-01"), size = 4.5, label = paste0("R = ", myround(r.ca$R,2), "[", myround(r.ca$CI_emp[1],2), " - ", myround(r.ca$CI_emp[2],2), "]")) + 
   scale_y_date(breaks = as.Date(c(1,32,60,91,121,152,182,213,244,274,305,335,366, 397, 425, 456, 486, 517, 547)-1, "1970-01-01"), date_labels = "%b") +
   ylab("Day of arrival to colony ") + xlab(expression("Short migration"%<-% "Individual" %->% "Long migration"))  + 
   scale_fill_gradientn(colours=c("#9d869e", "#979ebf","#93c6cf", "#ace089","#fff289"))+  theme_bw() +  
@@ -755,10 +767,8 @@ Figure S2 produced by LBBG_plasticity_pub.R
 Figure S2. An example of how mean routes were computed. a) The GPS tracks (small points along a line) and core areas (shaded polygons) from ID 5524 during autumn.  GPS points within the core area polygons were removed to create a smoothed route. Colour represents different years. Rectangle indicates area shown in b-d. b) A zoomed in section of the routes  along which 100 equally spaced points were placed (500 points were used in actual analysis), and the beginning positions of the mean route (centre line). Points were coloured sequentially, such that the colour of the points along the GPS route that were averaged together correspond. Large points connected by lines indicate which points along the GPS tracks were averaged to create the mean route.  Faded lines connecting large points on the mean track  indicate the nearest-neighbour locations on the GPS track to these points. c) Location of mean route following 1 iteration, with solid line connecting the GPS points averaged to determine the position of select points along the mean route. The original mean route with nearest-neighbour points are indicated by faded points and lines. New points (teal) were added if points along the mean route were separated by more than 25 km. d) The final mean route, after 100 points were equally placed along the route (500 points used in actual analysis). Points on the mean route are coloured based on their variance (low = purple, high = yellow). Lines indicate the distances  between mean route and GPS routes used to calculate the variance for select points.
 
 ```{r Fig. S3, include = T}
-
-
 #png("Figs3.png",  width = 16, height = 5.33, units = "cm", res = 600)
-p.direction <- ggplot(wa.ol, aes(med.mig, resid.var)) + geom_blank() + 
+p.direction <- ggplot(ol.df, aes(med.mig, resid.var)) + geom_blank() + 
   annotate("segment", x = 0.4, xend = 0.4, y = 0.6, yend = .15, size=.5, arrow=arrow(angle = 10, type = "closed", length = unit(0.1, "inches"))) + annotate("text", x = c(0,0, -.4), y = c(0.05,.675, .35),  label = c("High", "Low", "Variation"), angle = 90, size = 3) + xlim(-1,1) + ylim(0, .75) + theme_void()
 
 
@@ -907,42 +917,27 @@ pv5554<- ggplot(map.world, aes(long, lat, group = group)) +
 ```
 Figure S4. Examples of high (left) and low (right) route variation for short (top), mid (middle) and long distance migrants (bottom).  Black paths show GPS migration routes and mean route is coloured based on variation (scale differs per plot).  The device number (id) and mean variation are reported above each plot. 
 
-Table S2. ‘Simple’ linear mixed model results for arrival and departure dates with individual as a random effect. T values are reported in brackets for the intercept. Individual variance is the variance of the individual-level random effect. Number of observations used in the models was 233, with 82 individuals. 
+Table S2. Linear mixed model results for arrival and departure dates with individual as a random effect. T values are reported in brackets for the intercept. Individual variance is the variance of the individual-level random effect. Number of observations used in the models was 233, with 82 individuals. **All individuals (including switchers) were included, this was used to calculate repeatability (part 1)**
 ```{r Table S2, include = T}
 kable(summary(lmm.cd)$varcor, digits = 5, caption = "Partitioning of variance in colony departure dates between random (individual) effect and residuals")
-kable(summary(lmm.cd)$coef, digits = 5, caption = "Linear mixed model of individual colony departure date versus their maximum migration distance")
+kable(summary(lmm.cd)$coef, digits = 5, caption = "Linear mixed model of individual colony departure date versus their median migration distance")
 
 kable(summary(lmm.wa)$varcor, digits = 5, caption = "Partitioning of variance in winter arrival dates between random (individual) effect and residuals")
-kable(summary(lmm.wa)$coef, digits = 5, caption = "Linear mixed model of individual winter arrival date versus their maximum migration distance")
+kable(summary(lmm.wa)$coef, digits = 5, caption = "Linear mixed model of individual winter arrival date versus their median migration distance")
 
 kable(summary(lmm.wd)$varcor, digits = 5, caption = "Partitioning of variance in winter departure dates between random (individual) effect and residuals")
-kable(summary(lmm.wd)$coef, digits = 5, caption = "Linear mixed model of individual winter departure date versus their maximum migration distance")
+kable(summary(lmm.wd)$coef, digits = 5, caption = "Linear mixed model of individual winter departure date versus their median migration distance")
 
 kable(summary(lmm.ca)$varcor, digits = 5, caption = "Partitioning of variance in colony arrival dates between random (individual) effect and residuals")
-kable(summary(lmm.ca)$coef, digits = 5, caption = "Linear mixed model of individual colony arrival date versus their maximum migration distance")
+kable(summary(lmm.ca)$coef, digits = 5, caption = "Linear mixed model of individual colony arrival date versus their median migration distance")
 
 ```
 
-Table S3. ‘Full’ linear mixed model results for arrival and departure dates against sex and migration distance with individual and colony as random effects. T values are reported in brackets for fixed effects, where colony variance is the variance of the colony-level random effect, and individual variance is the variance of the individual-level random effect. Number of observations used in the models was 229, with 8 colonies and 80 individuals.
-```{r Table S3, include = T}
-# kable(summary(lmm.cd.full)$varcor, digits = 5, caption = "Partitioning of variance in colony departure dates between random (individual) effect and residuals")
-# kable(summary(lmm.cd.full)$coef, digits = 5, caption = "Linear mixed model of individual colony departure date versus their maximum migration distance")
-# 
-# kable(summary(lmm.wa.full)$varcor, digits = 5, caption = "Partitioning of variance in winter arrival dates between random (individual) effect and residuals")
-# kable(summary(lmm.wa.full)$coef, digits = 5, caption = "Linear mixed model of individual winter arrival date versus their maximum migration distance")
-# 
-# kable(summary(lmm.wd.full)$varcor, digits = 5, caption = "Partitioning of variance in winter departure dates between random (individual) effect and residuals")
-# kable(summary(lmm.wd.full)$coef, digits = 5, caption = "Linear mixed model of individual winter departure date versus their maximum migration distance")
-# 
-# kable(summary(lmm.ca.full)$varcor, digits = 5, caption = "Partitioning of variance in colony arrival dates between random (individual) effect and residuals")
-# kable(summary(lmm.ca.full)$coef, digits = 5, caption = "Linear mixed model of individual colony arrival date versus their maximum migration distance")
-
-```
 
 
 ```{r Figure S5, include = T}
+###id w changing wa areas removed
 ##multi-pannel histogram
-
 p.hol <- ggplot(ol.df, aes(mn_overlap))+ geom_histogram(col = "gray75") + 
   geom_vline(xintercept = quantile(ol.df$mn_overlap, .05), col = "red") + 
   xlab("Distribution Overlap") + ylab("Number of Individuals") + ylim(0,35) +xlim(0,1) +
@@ -1000,9 +995,9 @@ plot_grid(p.hol, p.hsf, p.htf, p.hts, p.hcd, p.hwa, p.hwd, p.hca, nrow = 4)
  dev.off()
 
 ```
-Figure S5. Histograms of a) nonbreeding season overlap, b) autumn route variation, c) spring route variation, d) Individual-level repeatability (Ri) of departure date from colony, e) Ri of arrival date to wintering area, f) Ri of departure date from wintering area and g) Ri of arrival date to colony. Lines indicate the 95th percentile used to identify the most variable individuals in Table S4.
+Figure S5. Histograms of a) nonbreeding season overlap, b) autumn route variation, c) spring route variation, d) Individual-level repeatability (Ri) of departure date from colony, e) Ri of arrival date to wintering area, f) Ri of departure date from wintering area and g) Ri of arrival date to colony. Lines indicate the 95th percentile used to identify the most variable individuals in Table S4. **Individuals who changed wintering area have been excluded.**
 
-Table S3.  Individuals (device number) in and above the 95th percentile for each measure of variation in the indicated behaviour.  Individuals that were among the most variable for multiple behaviours are in bold. Asterix indicate individuals that did not overlap in their wintering area in one year. All values for overlap and repeatability (Ri) range from 0 to 1.
+Table S3.  Individuals (device number) in and above the 95th percentile for each measure of variation in the indicated behaviour.  Individuals that were among the most variable for multiple behaviours are in bold. **Asterix indicate individuals that did not overlap in their wintering area in one year.** All values for overlap and repeatability (Ri) range from 0 to 1. **Individuals who changed wintering area have been excluded.**
 ```{r Table S4, include = T}
 filter(ol.df, mn_overlap <= quantile(ol.df$mn_overlap, .05)) %>% select(id,mn_overlap) %>% arrange(mn_overlap)
 
@@ -1033,20 +1028,20 @@ table(varid)
 
 ```
 
-```{r Figure S6, include=T}
 
-p.direction <- ggplot(wa.ol, aes(med.mig, resid.var)) + geom_blank() + 
+```{r Figure S6, include=T}
+p.direction <- ggplot(ol.df, aes(med.mig, resid.var)) + geom_blank() + 
   annotate("segment", x = 0.4, xend = 0.4, y = 0.3, yend = .1, size=.5, arrow=arrow(angle = 10, type = "closed", length = unit(0.1, "inches"))) + annotate("text", x = c(0,0, -.4), y = c(0.04,.36, .18),  label = c("High", "Low", "Variation"), angle = 90, size = 3) + xlim(-1,1) + theme_void()
 
-p.olr <- ggplot(wa.ol, aes(med.mig, resid.var)) + geom_point(size = 1) + geom_smooth(method = "lm",se=F, size = 1, col = "black") + xlab("Median migration distance (km)")  + ylab("Residual Distribution Overlap") + scale_x_continuous(expand = c(0, 0)) + ggtitle('a') +
+p.olr <- ggplot(ol.df, aes(med.mig, resid.var)) + geom_point(size = 1) + geom_smooth(method = "lm",se=F, size = 1, col = "black") + xlab("Median migration distance (km)")  + ylab("Residual Distribution Overlap") + scale_x_continuous(expand = c(0, 0)) + ggtitle('a') +
   theme_bw() +  theme( axis.text =element_text(size=9),axis.title.y=element_text(size=9), legend.position = "none", panel.grid=element_blank(), plot.title=element_text(hjust=0), plot.background = element_blank(), plot.margin = margin(3, 3, 3, 3)) ##with 95% confidence interval
 
 p.str <- ggplot(traj.s.w, aes(med.mig, resid.var)) + geom_point(size = 1) + ggtitle('c') +
   ylab("Residual spring route variation (km)") + xlab("Median migration distance (km)")  + theme_bw() + scale_x_continuous(expand = c(0, 0)) +
   theme(axis.text =element_text(size=9), legend.position = "none", axis.title.y=element_text(size=9),panel.grid=element_blank(), plot.title=element_text(hjust=0), plot.background = element_blank(), plot.margin = margin(3, 3, 3, 3)) + ylim(125, -125)
 
-p.ftr<-ggplot(traj.f.w,  aes(med.mig, resid.var)) + geom_point(size = 1) + ggtitle('b') +
-  ylab("Residual spring route variation (km)") + xlab("Median migration distance (km)")  + theme_bw() + scale_x_continuous(expand = c(0, 0)) +
+p.ftr<- ggplot(traj.f.w,  aes(med.mig, resid.var)) + geom_point(size = 1) + ggtitle('b') +
+  ylab("Residual autumn route variation (km)") + xlab("Median migration distance (km)")  + theme_bw() + scale_x_continuous(expand = c(0, 0)) +
   theme(axis.text =element_text(size=9), legend.position = "none", axis.title.y=element_text(size=9), plot.background = element_blank(), panel.grid=element_blank(), plot.title=element_text(hjust=0), plot.margin = margin(3, 3, 3, 3)) + ylim(125, -125)
 
 
@@ -1054,5 +1049,4 @@ p.ftr<-ggplot(traj.f.w,  aes(med.mig, resid.var)) + geom_point(size = 1) + ggtit
 tiff("Figs6.tiff",  width = 20, height = 8, units = "cm", res = 300)
 plot_grid(p.direction, p.olr, p.ftr, p.str, nrow = 1, rel_widths = c(.1,1,1,1))
 dev.off()
-
 ```
