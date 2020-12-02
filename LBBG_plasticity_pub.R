@@ -1087,8 +1087,8 @@ all_traj <- all_traj %>% left_join(pair.miss) %>% filter(is.na(n.years)) %>% sel
 id.dir <- all_traj %>%  select(id, direction) %>% distinct() ##all traj
 id.dir <- filter(id.dir, ! id %in% c(1402, 606, 5027, 5593, 534)) ## 534 - wa poly doesn't overlap, but explored that area
 
-mn_traj <- data.frame(matrix(ncol = 5, nrow = 0))
-names(mn_traj) <- c("mn.lon", "mn.lat", "within.var", "id", "direction")
+mn_traj <- data.frame(matrix(ncol = 6, nrow = 0))
+names(mn_traj) <- c("mn.lon", "mn.lat", "within.var", "id", "direction", "n.years")
 
 for(a in 1:length(id.dir$id)){
   # for(a in a:length(id.dir$id)){  
@@ -1214,6 +1214,7 @@ for(a in 1:length(id.dir$id)){
   names(tmean) <- c("mn.lon", "mn.lat", "within.var")
   tmean$id <- id.dir[[a, "id"]]
   tmean$direction <- id.dir[[a, "direction"]]
+  tmean$n.years <- length(name)
   mn_traj <- rbind(mn_traj, tmean)
 
   
