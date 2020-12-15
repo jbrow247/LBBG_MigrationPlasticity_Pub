@@ -11,7 +11,6 @@ output:
 knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path='Fig.s/',
                       echo = F, message=FALSE, include = F)
 
-#setwd("C:/Users/jbrown1/surfdrive/PhD/Research/Plasticity of migratory strategies/R/Publication_version/Plasticity_pub")
 library(lme4)
 library(lubridate)
 library(tidyverse)
@@ -81,12 +80,11 @@ no.so.overlap <- filter(gull, !is.na(p.no.overlap)) %>% select(id) %>% distinct(
 no.wa.overlap <- filter(gull, change.wa == T) %>% pull(id)
 no.wa.overlap <- unique(no.wa.overlap)
 
-
 ```
 
 ```{r mig.dist repeatability}
-r.md <- rptR::rpt(mig.dist ~ (1 | id) + (1 | col), grname = c("id"), data = gull, 
-            datatype = "Gaussian", nboot = 1000, npermut = 1000)
+r.md <- rpt(mig.dist ~ (1 | id)  + (1 | col), grname = c("id"), data = gull, 
+            datatype = "Gaussian", nboot = 1000, npermut = 0)
 
 lmm.md <- lmer(mig.dist ~ (1 | id)+ (1 | col), data = gull)
 
@@ -146,9 +144,7 @@ rand.ol$pair <- factor(rand.ol$pair)
 ##Actual overlap between random pairs versus within individuals
 bp.ol <- ggplot(rand.ol, aes(pair, overlap)) + geom_boxplot() +ylab("Nonbreeding Range Overlap") + theme(axis.title.y = element_text(size = 9),  axis.text = element_text(size = 9), axis.title.x = element_blank())
 
-
 ######Randomization
-
 ##First calculate actual difference in overlap between within indivdiual versus between random individuals
 n1 <- length(rand.ol$overlap[rand.ol$pair == "Within"])
 n2 <- length(rand.ol$overlap[rand.ol$pair == "Between"])
@@ -407,7 +403,6 @@ ggplot(ol.df, aes(med.mig, resid.var)) + geom_point()
 ```
 
 ```{r colony departure lmm}
-
 ##population repeatability
 r.cd <- rptR::rpt(col.depart ~ mig.dist + (1|col) + (1 | id), grname = c("id"), data = filter(gull, !is.na(col.depart))%>% mutate(mig.dist = mig.dist/1000), 
             datatype = "Gaussian", nboot = 1000, npermut = 0)
@@ -417,13 +412,12 @@ plot(lmm.cd)
 range.cd <- filter(gull, !is.na(col.depart)) %>% group_by(id) %>% summarise(range = max(col.depart) - min(col.depart)) ## range in individual departure dates
 
 ##Individual repeatability in colony departure
-# lmm.cd.nowa <- lmer(col.depart ~ mig.dist + (1|col) + (1 | id), data = filter(gull, !is.na(col.depart) & change.wa == F) %>% mutate(mig.dist = mig.dist/1000)) ##remove wa changers
 idres.cd <- data.frame(id = filter(gull, !is.na(col.depart))$id, resid = resid(lmm.cd))
 idvar.cd <- idres.cd %>% group_by(id) %>% summarise(idvar = mean(resid^2)) ##calculate indivdiuals residual variance
 idvar.cd <- filter(gull, !is.na(col.depart))%>% select(id, med.mig) %>% distinct() %>% full_join(idvar.cd)
 btwnvar <- VarCorr(lmm.cd)[[1]][1]
 idvar.cd$r <- btwnvar/(btwnvar+idvar.cd$idvar)
-# idvar.cd <- filter(gull, !is.na(col.depart)) %>% group_by(id) %>% summarise(range = max(col.depart) - min(col.depart)) %>% right_join(idvar.cd)
+
 ##linear model of indivdiual repeatability against migration distance
 data <- filter(idvar.cd, !is.na(med.mig))
 lm.cd <- lm(r~med.mig, data = data)
@@ -432,12 +426,9 @@ lrt.cd <- anova(lm.cd.n, lm.cd) ## null
 ```
 
 ```{r Winter arrival lmm}
-r.wa <- rptR::rpt(winter.arrive ~mig.dist + (1|col) + (1 | id) , grname = c("id"), data = filter(gull, !is.na(winter.arrive)) %>% mutate(mig.dist = mig.dist/1000), 
-            datatype = "Gaussian", nboot = 1000, npermut = 0) ##population repeatability
-# r.wa.full <- rptR::rpt(winter.arrive ~ sex + mig.dist + (1|col) + (1 | id), grname = c("id"), data = filter(gull, !is.na(winter.arrive)), 
-#             datatype = "Gaussian", nboot = 1000, npermut = 0)
+r.wa <- rptR::rpt(winter.arrive ~ (1|col) + (1 | id) , grname = c("id"), data = filter(gull, !is.na(winter.arrive)) %>% mutate(mig.dist = mig.dist/1000),             datatype = "Gaussian", nboot = 1000, npermut = 0) ##population repeatability
 
-lmm.wa <- lmer(winter.arrive ~ mig.dist + (1|col) +  (1 | id), data = filter(gull, !is.na(winter.arrive))%>% mutate(mig.dist = mig.dist/1000))
+lmm.wa <- lmer(winter.arrive ~ (1|col) +  (1 | id), data = filter(gull, !is.na(winter.arrive))%>% mutate(mig.dist = mig.dist/1000))
 plot(lmm.wa)
 
 ##individual repeatability
@@ -469,7 +460,6 @@ plot(lmm.wd)
 
 ##individual repeatability
 ##remove id who change wa
-# lmm.wd.nowa <- lmer(winter.depart ~ mig.dist + (1|col) + (1 | id), data = gull %>% filter(change.wa == F) %>% mutate(mig.dist = mig.dist/1000))
 idres.wd <- data.frame(id = gull$id, resid = resid(lmm.wd))
 idvar.wd <- idres.wd %>% group_by(id) %>% summarise(idvar = mean(resid^2)) ##calculate indivdiuals residual variance
 idvar.wd <- gull %>% select(id, med.mig) %>% distinct() %>% full_join(idvar.wd)
@@ -495,7 +485,6 @@ plot(lmm.ca)
 
 ##individual repeatability
 #remove id w change wa
-# lmm.ca.nowa <- lmer(col.arrival ~ mig.dist + (1|col) + (1 | id), data = gull %>% filter(change.wa == F) %>% mutate(mig.dist = mig.dist/1000))
 idres.ca <- data.frame(id = gull$id, resid = resid(lmm.ca))
 idvar.ca <- idres.ca %>% group_by(id) %>% summarise(idvar = mean(resid^2)) ##calculate indivdiuals residual variance
 idvar.ca <- gull %>% select(id, med.mig) %>% distinct() %>% full_join(idvar.ca)
@@ -516,9 +505,7 @@ range.ca <- gull  %>% group_by(id) %>% summarise(range = max(col.arrival) - min(
 ```
 
 ```{r repeatable ids}
-
 ###id w changing wa areas removed
-
 plastic.id <- as.character(filter(idvar.ca, r <= quantile(idvar.ca$r, .05))$id)
 plastic.id <- c(as.character(filter(idvar.cd, r <= quantile(idvar.cd$r, .05))$id),plastic.id)
 plastic.id <-c(as.character(filter(idvar.wa, r <= quantile(idvar.wa$r, .05))$id),plastic.id)
@@ -554,42 +541,26 @@ While most individuals tended to be highly consistent, for each behaviour a few 
 
 ## Influence of migration distance on individual variation
 
-Migration distances ranged from `r round(min(gull$mig.dist),0)` &ndash; `r round(max(gull$mig.dist),0)` km (median = `r round(median(gull$mig.dist),0)` km). Intra-individual non-breeding distribution overlap decreased with migration distance (overlap = `r myround(wa.ol.lm$coefficients[1],3)` + `r myround(wa.ol.lm$coefficients[2],6)`·migration distance, F(`r lrt.ol$Df[2]`, `r lrt.ol$Res.Df[2]`) = `r myround(lrt.ol$F [2],3)`, p = `r myround(lrt.ol$"Pr(>F)"[2],3)`; Fig. 2a). However, intra-individual variation increased at a significantly lower rate than the increase between individuals (residual overlap = `r myround(wa.dol.lm$coefficients[1],3)` + `r myround(wa.dol.lm$coefficients[2],3)`·migration distance, F(`r lrt.dol$Df[2]`, `r lrt.dol$Res.Df[2]`) = `r myround(lrt.dol$F[2],3)`, p = `r myround(lrt.dol$"Pr(>F)"[2],3)`; Fig s6a in supplemental material), suggesting that longer distance migrants were less variable in their behaviour than expected when considering the total space traversed during their movements (and vice-versa for shorter distance migrants). Intra-individual route variation increased significantly with migration distance in spring (variation = `r myround(lm.w.s$coefficients[1],3)` + `r myround(lm.w.s$coefficients[2],3)`·migration distance, F(`r lrt.w.s$Df[2]`, `r lrt.w.s$Res.Df[2]`) = `r myround(lrt.w.s$F[2],3)`, p = `r myround(lrt.w.s$"Pr(>F)"[2],3)`; Fig. 2d), but not autumn (F(`r lrt.w.f$Df[2]`, `r lrt.w.f$Res.Df[2]`) = `r myround(lrt.w.f$F[2],3)`, p = `r myround(lrt.w.f$"Pr(>F)"[2],3)`; Fig. 2c). Changes in route variation with migration distance did not, however, significantly differ from those observed between individuals (autumn: F(`r lrt.dtraj.f$Df[2]`, `r lrt.dtraj.f$Res.Df[2]`) = `r myround(lrt.dtraj.f$F[2],3)`, p = `r myround(lrt.dtraj.f$"Pr(>F)"[2],3)`, spring: F(`r lrt.dtraj.s$Df[2]`, `r lrt.dtraj.s$Res.Df[2]`) = `r myround(lrt.dtraj.s$F[2],3)`, p = `r myround(lrt.dtraj.s$"Pr(>F)"[2],3)`, Fig S6b-c in supplemental material).
+Migration distances ranged from `r round(min(gull$mig.dist),0)` &ndash; `r round(max(gull$mig.dist),0)` km (median = `r round(median(gull$mig.dist),0)` km). Intra-individual non-breeding distribution overlap decreased with migration distance (overlap = `r myround(wa.ol.lm$coefficients[1],3)` + `r myround(wa.ol.lm$coefficients[2],6)`·migration distance, F(`r lrt.ol$Df[2]`, `r lrt.ol$Res.Df[2]`) = `r myround(lrt.ol$F [2],3)`, p = `r myround(lrt.ol$"Pr(>F)"[2],3)`; Fig. 2a). However, intra-individual variation increased at a significantly lower rate than the increase between individuals (residual overlap = `r myround(wa.dol.lm$coefficients[1],3)` + `r myround(wa.dol.lm$coefficients[2],3)`·migration distance, F(`r lrt.dol$Df[2]`, `r lrt.dol$Res.Df[2]`) = `r myround(lrt.dol$F[2],3)`, p = `r myround(lrt.dol$"Pr(>F)"[2],3)`; Fig s6a in supplemental material), suggesting that longer distance migrants were less variable in their behaviour than expected when considering the total space traversed during their movements (and vice-versa for shorter distance migrants). Intra-individual route variation increased slightly but significantly with migration distance in spring (variation = `r myround(lm.w.s$coefficients[1],3)` + `r myround(lm.w.s$coefficients[2],3)`·migration distance, F(`r lrt.w.s$Df[2]`, `r lrt.w.s$Res.Df[2]`) = `r myround(lrt.w.s$F[2],3)`, p = `r myround(lrt.w.s$"Pr(>F)"[2],3)`; Fig. 2d), even after accounting for increasing between-individual variation ( `r myround(dtraj.s.lm$coefficients[1],3)` + `r myround(dtraj.s.lm$coefficients[2],3)`·migration distance; F(`r lrt.dtraj.s$Df[2]`, `r lrt.dtraj.s$Res.Df[2]`) = `r myround(lrt.dtraj.s$F[2],3)`, p = `r myround(lrt.dtraj.s$"Pr(>F)"[2],3)`, Fig S6c in supplemental material). Autumn route variation did not change with migration distance  (F(`r lrt.w.f$Df[2]`, `r lrt.w.f$Res.Df[2]`) = `r myround(lrt.w.f$F[2],3)`, p = `r myround(lrt.w.f$"Pr(>F)"[2],3)`; Fig. 2c), nor did it significantly differ from variation observed between individuals (F(`r lrt.dtraj.f$Df[2]`, `r lrt.dtraj.f$Res.Df[2]`) = `r myround(lrt.dtraj.f$F[2],3)`, p = `r myround(lrt.dtraj.f$"Pr(>F)"[2],3)`, Fig S6b).
 
 
 Winter site fidelity did not change significantly with migration distance (F(`r lrt.sf$Df[2]`, `r lrt.sf$Res.Df[2]`) = `r myround(lrt.sf$F[2],3)`, p = `r myround(lrt.sf$"Pr(>F)"[2],3)`, Fig2b). Migration distance also did not correlate with individual repeatability in departure date from colony (F(`r lrt.cd$Df[2]`, `r lrt.cd$Res.Df[2]`) = `r myround(lrt.cd$F[2],3)`, p = `r myround(lrt.cd$"Pr(>F)"[2],3)`; Fig. 2e), arrival to wintering area (F(`r lrt.wa$Df[2]`, `r lrt.wa$Res.Df[2]`) = `r myround(lrt.wa$F[2],3)`, p = `r myround(lrt.wa$"Pr(>F)"[2],3)`; Fig. 2f), departure from wintering area (F(`r lrt.wd$Df[2]`, `r lrt.wd$Res.Df[2]`) = `r myround(lrt.wd$F[2],3)`, p = `r myround(lrt.wd$"Pr(>F)"[2],3)`; Fig. 2g) or arrival to colony (F(`r lrt.ca$Df[2]`, `r lrt.ca$Res.Df[2]`) = `r myround(lrt.ca$F[2],3)`, p = `r myround(lrt.ca$"Pr(>F)"[2],3)`; Fig. 2h), suggesting individual consistency of migration timing did not increase with migration distance. 
 
 ```{r Table 1, include = T}
-all_traj <- readRDS("all_traj.RDS") 
-all_traj <- ungroup(all_traj) %>% arrange(id, time)
-
-n_check <- all_traj %>% select(-time, -dur) %>% distinct() %>% arrange(id_birdyear)
-
-##traj needs to be greater than 1 point
-tmp <- n_check %>% filter(direction == "Spring") %>% select(id_birdyear, direction, lon, lat) %>% distinct()
-nopath <- rle(tmp$id_birdyear)$values[which(rle(tmp$id_birdyear)$lengths <=1)]
-all_traj <- filter(all_traj, !(id_birdyear %in% nopath & direction == "Spring"))
-tmp <- n_check %>% filter(direction == "Autumn") %>% select(id_birdyear, direction, lon, lat) %>% distinct()
-nopath <- rle(tmp$id_birdyear)$values[which(rle(tmp$id_birdyear)$lengths <=1)]
-all_traj <- filter(all_traj, !(id_birdyear %in% nopath & direction == "Autumn"))
-
-pair.miss <- all_traj %>% select(id, id_birdyear, direction) %>% distinct()
-pair.miss <- pair.miss %>% group_by(id, direction) %>% summarise(n.years = n()) %>% filter(n.years <=1)
-
-all_traj <- all_traj %>% left_join(pair.miss) %>% filter(is.na(n.years)) %>% select(-n.years)
-
-tmp <- gull %>% select(id, birdyear, col) %>% mutate(id = as.numeric(as.character(id))) %>% distinct()
-spring.seasons <- all_traj %>% select(id, birdyear, direction) %>% filter(direction == "Spring" & ! id %in% c(1402, 606, 5027, 5593, 534)) %>% distinct() %>%
-  left_join(tmp)
-fall.seasons <- all_traj %>% select(id, birdyear, direction) %>% filter(direction == "Autumn"& ! id %in% c(1402, 606, 5027, 5593, 534)) %>% distinct() %>% left_join(tmp)
-
-n.id.md <- table((gull %>% select(id, col) %>% distinct())$col)
-n.s.md <- table((gull %>% select(id, birdyear, col) %>% distinct())$col)
+##n ids using migration distance
+n.id.md <- table((gull %>% filter(!is.na(mig.dist)) %>% select(id, col) %>% distinct())$col)
+##n seasons using migration distance
+n.s.md <- table((gull %>% filter(!is.na(mig.dist)) %>% select(id, birdyear, col) %>% distinct())$col)
+#n. individuals for route averaging
 n.id.tf <-table((gull %>% select(id, col) %>% distinct() %>% right_join(wtraj.f))$col)
-n.id.ts <-table((gull %>% select(id, col) %>% distinct() %>% right_join(wtraj.s))$col)
-n.s.tf <-table((fall.seasons)$col)
-n.s.ts <-table((spring.seasons)$col)
+n.id.ts <- table((gull %>% select(id, col) %>% distinct() %>% right_join(wtraj.s))$col)
+#n. seasons for route averaging
+traj.seasons <- mn_traj %>% select(id, direction, n.years) %>% distinct() %>% left_join(gull %>% select(id, col) %>% distinct())
 
+n.s.tf <- traj.seasons %>% filter(direction == "Autumn") %>% group_by(col) %>% summarise(n.seasons = sum(n.years)) %>% pull(n.seasons)
+names(n.s.tf) <- traj.seasons %>% filter(direction == "Autumn") %>% group_by(col) %>% summarise(n.seasons = sum(n.years)) %>% pull(col)
+n.s.ts <- traj.seasons %>% filter(direction == "Spring") %>% group_by(col) %>% summarise(n.seasons = sum(n.years)) %>% pull(n.seasons)
+names(n.s.tf) <- traj.seasons %>% filter(direction == "Spring") %>% group_by(col) %>% summarise(n.seasons = sum(n.years)) %>% pull(col)
 ##Values per colony
 rbind(n.id.md, n.id.tf, n.id.ts, n.s.md, n.s.tf, n.s.ts)
 ## Totals
@@ -628,7 +599,7 @@ Figure 1. Mean individual migration trajectories in autumn and spring based on G
 wa.ol.lm.b <- lm(overlap ~ med.mig, data = filter(ol, pair == 'between'))
 
 p.direction <- ggplot(ol.df, aes(med.mig, resid.var)) + geom_blank() + 
-  annotate("segment", x = 0.4, xend = 0.4, y = 0.26, yend = .10, size=.5, arrow=arrow(angle = 10, type = "closed", length = unit(0.1, "inches"))) + annotate("text", x = c(0,0, -.4), y = c(0.04,.32, .18),  label = c("High", "Low", "Variation"), angle = 90, size = 3) + xlim(-1,1) + theme_void()
+  annotate("segment", x = 0.4, xend = 0.4, y = 0.29, yend = .13, size=.5, arrow=arrow(angle = 10, type = "closed", length = unit(0.1, "inches"))) + annotate("text", x = c(0,0, -.4), y = c(0.04,.35, .21),  label = c("     High", "Low", "Variation"), angle = 90, size = 3) + xlim(-1,1) + theme_void()
 
 
 ol.df.pair <- rbind(rand.UD_overlap_range %>% select(overlap, med.mig, pair),
@@ -761,8 +732,8 @@ Table S1. The number of Lesser black-backed gulls with a given number of nonbree
 ```{r Table S1, include = T}
 n.id.md <-  as.vector(table(table(gull$id)))
 n.yrs <- names(table(table(gull$id)))
-n.id.tf <-  c(as.vector(table(table(fall.seasons$id))), 0, 0)
-n.id.ts <-  c(as.vector(table(table(spring.seasons$id)))[1:4], 0, as.vector(table(table(spring.seasons$id)))[5])
+n.id.tf <-  c(table((traj.seasons %>% filter(direction == "Autumn"))$n.years) , 0, 0)
+n.id.ts <-  c(table((traj.seasons %>% filter(direction == "Spring"))$n.years) [1:4], 0, table((traj.seasons %>% filter(direction == "Spring"))$n.years)[5])
 df <- data.frame(n.yrs, n.id.md, n.id.tf,n.id.ts)
 colnames(df) <- c("Number of Seasons", "Number of Individuals - migdist", "Number of Individuals - fall traj", "Number of Individuals - spring traj" )
 
@@ -790,6 +761,8 @@ Figure S1.  produced by LBBG_plasticity_pub.R
 Figure S1. Examples of low (left) and high (right) nonbreeding distribution overlap for short (top), mid (middle) and long distance migrants (bottom).  The 25, 50, 75 and 95% contours are delineated, with the 50% contour used to identify core areas represented by the thicker line. The twice daily subsampled points used to make the utilization distributions are shown.  Contours and points are coloured by season. The device number (id) and overlap are reported above each plot.
 
 ```{r Fig S4 examples - rouve variation, include = T}
+all_traj <- readRDS("all_traj.RDS")
+
 theme_set(theme_bw())
 example.id <- c(5554,833,608, 537, 5337,540)
 mn.ex <- filter(mn_traj, id %in% example.id)
@@ -997,7 +970,7 @@ p.hwd <- ggplot(idvar.wd, aes(r))+ geom_histogram(col = "gray75") +
 
 
 #  pdf("Figure_S5.pdf",  width =3.94, height = 6.3)
-# # png("FigS5.png",  width = 10, height = 16, units = "cm", res = 400)
+# png("FigS5.png",  width = 10, height = 16, units = "cm", res = 400)
 tiff("Figs5.tiff",  width = 10, height = 16, units = "cm", res = 300)
 plot_grid(p.hol, p.hsf, p.htf, p.hts, p.hcd, p.hwa, p.hwd, p.hca, nrow = 4)
  dev.off()
